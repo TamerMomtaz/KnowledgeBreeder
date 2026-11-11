@@ -1,0 +1,1009 @@
+{
+ "schema_version": "1.0",
+ "generator": "tests/fixtures/make_demo_graph.py",
+ "generated_at": "2026-11-11T00:00:00Z",
+ "plant": {
+  "id": "DEMO",
+  "name": "Demo plant",
+  "source_file": null
+ },
+ "nodes": [
+  {
+   "id": "PLANT:DEMO",
+   "type": "Plant",
+   "label": "PLANT:DEMO",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "SHEET:D-001",
+   "type": "Sheet",
+   "label": "SHEET:D-001",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "page": 1,
+    "drawing_number": "D-001"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "BOUNDARY:RAW WATER",
+   "type": "Boundary",
+   "label": "BOUNDARY:RAW WATER",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "direction": "source"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "BOUNDARY:TO PROCESS",
+   "type": "Boundary",
+   "label": "BOUNDARY:TO PROCESS",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "direction": "sink"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "TK-101",
+   "type": "Equipment",
+   "label": "TK-101",
+   "tag": "TK-101",
+   "kind": "tank",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "TK-102",
+   "type": "Equipment",
+   "label": "TK-102",
+   "tag": "TK-102",
+   "kind": "tank",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P-101",
+   "type": "Equipment",
+   "label": "P-101",
+   "tag": "P-101",
+   "kind": "centrifugal_pump",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P-102",
+   "type": "Equipment",
+   "label": "P-102",
+   "tag": "P-102",
+   "kind": "centrifugal_pump",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.6,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "V-001",
+   "type": "Component",
+   "label": "V-001",
+   "tag": "V-001",
+   "kind": "gate_valve",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "V-002",
+   "type": "Component",
+   "label": "V-002",
+   "tag": "V-002",
+   "kind": "gate_valve",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "V-003",
+   "type": "Component",
+   "label": "V-003",
+   "tag": "V-003",
+   "kind": "ball_valve",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {},
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "CV-0502",
+   "type": "Component",
+   "label": "CV-0502",
+   "tag": "CV-0502",
+   "kind": "control_valve",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "role": "final_element",
+    "loop_key": "F-0502",
+    "fail_position": "FC"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "FE-0502",
+   "type": "Instrument",
+   "label": "FE-0502",
+   "tag": "FE-0502",
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "variable": "flow",
+    "role": "primary_element",
+    "inline": true,
+    "loop_key": "F-0502"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "FIT-0502",
+   "type": "Instrument",
+   "label": "FIT-0502",
+   "tag": "FIT-0502",
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "variable": "flow",
+    "role": "transmitter",
+    "location": "field",
+    "loop_key": "F-0502"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "FIC-0502",
+   "type": "Instrument",
+   "label": "FIC-0502",
+   "tag": "FIC-0502",
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "variable": "flow",
+    "role": "controller",
+    "location": "dcs",
+    "loop_key": "F-0502"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "LI-101",
+   "type": "Instrument",
+   "label": "LI-101",
+   "tag": "LI-101",
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "variable": "level",
+    "role": "indicator",
+    "location": "field"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L1.1",
+   "type": "PipeSegment",
+   "label": "P01.L1.1",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L1"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L2.1",
+   "type": "PipeSegment",
+   "label": "P01.L2.1",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L2"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L2.2",
+   "type": "PipeSegment",
+   "label": "P01.L2.2",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L2"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L3.1",
+   "type": "PipeSegment",
+   "label": "P01.L3.1",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L3"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L3.2",
+   "type": "PipeSegment",
+   "label": "P01.L3.2",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L3"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L3.3",
+   "type": "PipeSegment",
+   "label": "P01.L3.3",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L3"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L4.1",
+   "type": "PipeSegment",
+   "label": "P01.L4.1",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L4"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "P01.L5.1",
+   "type": "PipeSegment",
+   "label": "P01.L5.1",
+   "tag": null,
+   "kind": null,
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "line_number": "L5"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  },
+  {
+   "id": "LOOP:F-0502",
+   "type": "ControlLoop",
+   "label": "F-0502",
+   "tag": null,
+   "kind": "control",
+   "name": null,
+   "status": "existing",
+   "dexpi_class": null,
+   "sheets": [
+    "SHEET:D-001"
+   ],
+   "confidence": 0.9,
+   "attributes": {
+    "loop_type": "control",
+    "variable": "flow",
+    "sensors": [
+     "FE-0502",
+     "FIT-0502"
+    ],
+    "controllers": [
+     "FIC-0502"
+    ],
+    "final_elements": [
+     "CV-0502"
+    ],
+    "description": "FIC-0502 controls flow by moving CV-0502"
+   },
+   "provenance": [
+    {
+     "sheet": "D-001",
+     "page": 1,
+     "bbox": null
+    }
+   ]
+  }
+ ],
+ "edges": [
+  {
+   "id": "E0",
+   "source": "BOUNDARY:RAW WATER",
+   "target": "V-001",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E1",
+   "source": "V-001",
+   "target": "P01.L1.1",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E2",
+   "source": "P01.L1.1",
+   "target": "TK-101",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E3",
+   "source": "TK-101",
+   "target": "P01.L2.1",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E4",
+   "source": "P01.L2.1",
+   "target": "V-002",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E5",
+   "source": "V-002",
+   "target": "P01.L2.2",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E6",
+   "source": "P01.L2.2",
+   "target": "P-101",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E7",
+   "source": "P-101",
+   "target": "P01.L3.1",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E8",
+   "source": "P01.L3.1",
+   "target": "CV-0502",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E9",
+   "source": "CV-0502",
+   "target": "P01.L3.2",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E10",
+   "source": "P01.L3.2",
+   "target": "FE-0502",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E11",
+   "source": "FE-0502",
+   "target": "P01.L3.3",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E12",
+   "source": "P01.L3.3",
+   "target": "TK-102",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E13",
+   "source": "TK-102",
+   "target": "P01.L4.1",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E14",
+   "source": "P01.L4.1",
+   "target": "V-003",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E15",
+   "source": "V-003",
+   "target": "BOUNDARY:TO PROCESS",
+   "type": "FLOWS_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E16",
+   "source": "TK-101",
+   "target": "P01.L5.1",
+   "type": "FLOWS_TO",
+   "confidence": 0.6,
+   "derived": false,
+   "attributes": {
+    "flow_direction": "inferred"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E17",
+   "source": "P01.L5.1",
+   "target": "P-102",
+   "type": "FLOWS_TO",
+   "confidence": 0.6,
+   "derived": false,
+   "attributes": {
+    "flow_direction": "inferred"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E18",
+   "source": "P-102",
+   "target": "P01.L3.1",
+   "type": "FLOWS_TO",
+   "confidence": 0.6,
+   "derived": false,
+   "attributes": {
+    "flow_direction": "inferred"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E19",
+   "source": "BOUNDARY:RAW WATER",
+   "target": "TK-101",
+   "type": "FEEDS",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E20",
+   "source": "TK-101",
+   "target": "P-101",
+   "type": "FEEDS",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E21",
+   "source": "TK-101",
+   "target": "P-102",
+   "type": "FEEDS",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E22",
+   "source": "P-101",
+   "target": "TK-102",
+   "type": "FEEDS",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E23",
+   "source": "P-102",
+   "target": "TK-102",
+   "type": "FEEDS",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E24",
+   "source": "TK-102",
+   "target": "BOUNDARY:TO PROCESS",
+   "type": "FEEDS",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E25",
+   "source": "FE-0502",
+   "target": "P01.L3.2",
+   "type": "MEASURES",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E26",
+   "source": "FIT-0502",
+   "target": "P01.L3.2",
+   "type": "MEASURES",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E27",
+   "source": "LI-101",
+   "target": "TK-101",
+   "type": "MEASURES",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E28",
+   "source": "FE-0502",
+   "target": "FIT-0502",
+   "type": "SIGNAL_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {
+    "signal_type": "electrical",
+    "purpose": "measurement"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E29",
+   "source": "FIT-0502",
+   "target": "FIC-0502",
+   "type": "SIGNAL_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {
+    "signal_type": "electrical",
+    "purpose": "measurement"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E30",
+   "source": "FIC-0502",
+   "target": "CV-0502",
+   "type": "SIGNAL_TO",
+   "confidence": 0.9,
+   "derived": false,
+   "attributes": {
+    "signal_type": "pneumatic",
+    "purpose": "control"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E31",
+   "source": "FIC-0502",
+   "target": "CV-0502",
+   "type": "ACTUATES",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {},
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E32",
+   "source": "FE-0502",
+   "target": "LOOP:F-0502",
+   "type": "MEMBER_OF",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {
+    "role": "sensor"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E33",
+   "source": "FIT-0502",
+   "target": "LOOP:F-0502",
+   "type": "MEMBER_OF",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {
+    "role": "sensor"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E34",
+   "source": "FIC-0502",
+   "target": "LOOP:F-0502",
+   "type": "MEMBER_OF",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {
+    "role": "controller"
+   },
+   "sheet": "SHEET:D-001"
+  },
+  {
+   "id": "E35",
+   "source": "CV-0502",
+   "target": "LOOP:F-0502",
+   "type": "MEMBER_OF",
+   "confidence": 0.9,
+   "derived": true,
+   "attributes": {
+    "role": "final_element"
+   },
+   "sheet": "SHEET:D-001"
+  }
+ ],
+ "stats": {},
+ "issues": []
+}
