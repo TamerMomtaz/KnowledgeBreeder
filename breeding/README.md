@@ -10,6 +10,9 @@ KnowledgeBreeder is meant to improve every time it is used. The loop:
    A challenger that does not win is recorded in `rejected.md` with its score, so nobody tries it twice.
 5. **A person signs.** Every promotion is a pull request. Nothing merges itself.
 
+Record each scored run in the run log as well (`--runlog breeding/runs.db`), so `kb log compare` can show which
+sheets a challenger got worse on, not only that the total moved.
+
 ## Files
 - `scores.jsonl`: one line per scored run (created by the first `kb score --log`).
 - `candidates.md`: what to try next, with sources.

@@ -23,6 +23,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/readers/` | Plug-in readers. The first one, `vector_geometry`, pulls the pipe network straight out of a vector PDF as exact coordinates: runs, tees, boxes, symbols, tags. | Tested on synthetic pages only |
 | `knowledgebreeder/use/` | The four use modules, all working on `graph.json`. | Tested on a demo plant |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
+| `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
 
 ## Quick start
@@ -78,6 +79,56 @@ kb read drawing.pdf --page 3 --out skeleton_p3.json
   It works on a copy and never edits the graph.
 - **Research** (`kb research`): process-design rules turned into questions. A pump with no discharge pressure gauge, a
   vessel with no level instrument, a control valve in no loop, parallel pumps of unknown duty. Each says where to look.
+
+## The run log
+
+Every piece of work can be recorded: which worker did it (a reader, a model, a script, a person), on which subject
+(a page, a file, a question), how long it took, what it cost and how it scored. The log is one SQLite file. It needs
+no server, works offline, and several processes can write to it at once.
+
+It knows nothing about P&IDs, on purpose. Any task where several workers attempt the same subjects can use it, and
+that is what lets one input be fanned out to many workers and the winner picked on evidence.
+
+Record from `kb` itself:
+
+```bash
+kb read drawing.pdf --page 3 --out skeleton_p3.json --runlog runs.db
+```
+
+```bash
+kb score work/plant/kg gold.json --runlog runs.db --worker seed --version 0.1.0 --subject D-001
+```
+
+Record work done elsewhere, such as a model reading a sheet:
+
+```bash
+RUN=$(kb log --db runs.db start --task read-pid --label baseline --subject haile.pdf)
+```
+
+```bash
+kb log --db runs.db step $RUN --name extract --worker model-name --subject page_03 --tokens-in 41000 --tokens-out 3200 --ms 95000 --score tags_f1=0.94
+```
+
+```bash
+kb log --db runs.db end $RUN
+```
+
+Ask it questions:
+
+```bash
+kb log --db runs.db workers --score flow_f1
+```
+
+```bash
+kb log --db runs.db compare RUN_A RUN_B
+```
+
+`workers` is the leaderboard: one row per worker and version, with mean score, how many steps that mean rests on,
+time, tokens and cost. `compare` names the subjects where the challenger got worse or better. `runs`, `show`,
+`failures` and `export` do what they say. From Python: `from knowledgebreeder.runlog import RunLog`.
+
+Limits: token and cost numbers are whatever the caller reports; the log does not measure them. Inputs and outputs
+over 256,000 characters are stored as a hash and a preview. `compare` assumes a higher score is better.
 
 ## Limits, plainly
 
