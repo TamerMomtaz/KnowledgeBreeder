@@ -25,7 +25,9 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/walk/` | Walk the plant: the graph drawn as one page that opens offline. Pick an item and see what stops with it or which valves box it in. | Tested on a demo plant; not yet on a real one |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
-| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, and a town you can open offline. Not tied to P&IDs. | Tested on invented cards; word matching only, no model yet |
+| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model and held to the cards. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server only, not yet with a real model |
+| `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. | Tested against a stand-in server only |
+| `knowledgebreeder/scout/` | The scout: reads pages you saved against your projects, keeps what the text itself shows, and keeps a ledger of everything it read and passed over. | Tested against a stand-in server only |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
 
 ## Quick start
@@ -237,6 +239,144 @@ call a model, and it does not look outside the picture. A "word match" is a hint
 tied to cards by their words, so a card can carry an `aliases:` line to help, and a name that fits two cards is
 reported, not guessed. The Arabic labels cover the page, not the text of your cards or the sentences in the
 reports.
+
+## Advice and the scout
+
+The reports above are rules. They find what is there. They cannot say what to do about it, and they cannot read a
+page you saved. A model can do both, and a model can also make things up. So kb splits the work: it picks the
+evidence, the model writes, and kb checks what the model wrote against the evidence before you see it.
+
+### Which models, and where your data may go
+
+kb asks the models you list in one private file, `work/models.json`. Make it on the machine that runs your local
+runtime (Ollama, llama.cpp or LM Studio: anything that speaks the OpenAI chat protocol):
+
+```bash
+kb models init
+```
+
+It asks the runtime which models it has and writes one entry for each, plus a `key` entry for the Claude API. See
+where each one lives:
+
+```bash
+kb models list
+```
+
+Check that they answer:
+
+```bash
+kb models check
+```
+
+The gate goes by address, not by name:
+
+- A model on **this machine** (`localhost`, `127.0.0.1`) is asked freely. kb does not use a proxy for it and does
+  not follow a redirect from it, so the prompt cannot be passed on.
+- A model on **your own network** (an address such as `192.168.1.20`) is asked freely only when its entry says
+  `"lan": true`. You write that yourself.
+- **Anything else** is refused unless that run names it with `--allow NAME`. The refusal says how much would have
+  been sent and where. Nothing is sent first.
+
+A key never goes in the file. The entry holds the name of the environment variable (`"key_env"`), kb reads it at the
+moment of the call, and it is not written to a log. A file that holds a key field is rejected. The key path uses
+the official Anthropic SDK, which is an extra install:
+
+```bash
+pip install -e ".[key]"
+```
+
+The example `key` entry turns on `"fallbacks": "default"`: if the model declines a request, the API lets another
+Claude model answer, and kb says which one did. Remove that line to turn it off.
+
+A local runtime may cut a long prompt to fit its context window without saying so. kb therefore sends a local model
+a bounded amount (`"budget"`, 8,000 characters by default), tells you how many lines did not fit, and warns when the
+token count the runtime reports is far too low for what was sent. Raise `budget` in the entry when your runtime's
+window allows it.
+
+### Advice
+
+```bash
+kb picture advise
+```
+
+kb sends numbered lines from your cards and from the rule reports. The model must name the lines each piece of
+advice rests on. kb then drops any piece that rests on no line it sent and says how many it dropped, marks any
+figure that is in none of the cited lines, and prints each piece with the card and heading it came from. The model
+is named at the top.
+
+See exactly what would be sent, and send nothing:
+
+```bash
+kb picture advise --show-prompt
+```
+
+One project in depth:
+
+```bash
+kb picture advise --project "Saturday baking class"
+```
+
+A hard question, to the key, with your yes for this run:
+
+```bash
+kb picture advise --model key --allow key
+```
+
+Add `--lang ar` for advice in Arabic.
+
+### The same question to several models
+
+```bash
+kb picture advise --models local,local-2
+```
+
+Each model answers on its own and the run log keeps them side by side: time, tokens, how many pieces passed the
+check. Those numbers are a floor, not a judgement. Whether advice is any good is yours to say. When you have read
+them, record the one you would act on:
+
+```bash
+kb models pick RUN local-2
+```
+
+Over time the run log shows which model you keep choosing:
+
+```bash
+kb log workers --task advise --score picked
+```
+
+### The scout
+
+Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:
+
+```bash
+kb scout read work/sources
+```
+
+For each source the scout finds the cards it shares words with, asks the model whether the text holds a real chance
+for one of your projects, and checks the answer against the text. The quote must be in the source word for word. The
+words that give the deadline must be in it too, with the same day and year. A project the model names must be one
+kb offered. What passes is listed under **Chances**, the nearest deadline first. What the model claimed and kb could
+not confirm is listed apart. Nothing is dropped silently.
+
+Every reading goes into a ledger, `work/scout.jsonl`, whatever the verdict:
+
+```bash
+kb scout log
+```
+
+It lists the chances still open today, and every source the scout passed over with the reason it gave. If a real
+chance sits under "Passed over", the scout missed it, and now you know.
+
+Limits: none of this has run against a real model yet. The tests use a stand-in server that returns canned answers,
+so they prove what kb does with an answer, good or bad, and say nothing about how good a real model's advice is.
+That takes a first run on your own machine. The checks catch a citation to a line that was never sent, a quote that
+is not in the source, and a figure or deadline that is not there. They do not catch advice that cites real lines and
+is still wrong, so a person reads it and signs. The scout reads what you save. It does not search the web, and no
+tool can promise that no chance is ever missed. It checks a deadline's day and year against the quoted words, not
+the month. Matching by words is weak across languages, so an Arabic page against English cards relies on the model.
+A saved page is someone else's text: the model is told to treat it as data, and kb believes nothing about it that
+the text does not show, but a page written to mislead can still waste your time. The run log stores the evidence
+lines that were sent, so treat `runs.db` and `work/` as private.
 
 ## Limits, plainly
 

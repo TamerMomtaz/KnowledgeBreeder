@@ -22,10 +22,18 @@
     kb picture overlaps / gaps / reuse          the same idea twice, what is missing, what could travel
     kb picture brief                            a short list of moves worth a look
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
+    kb picture advise                           advice written by a model, held to your own cards
+
+    kb models init / list / check               which models kb may ask, and where each one lives
+    kb models pick RUN NAME                     record which model's answer you chose
+    kb scout read work/sources                  read saved pages against your projects, look for chances
+    kb scout log                                everything the scout read, with what it passed over and why
 
 The graph argument is a graph.json, or the folder holding one.
 The run log is one SQLite file: --db PATH, or the KB_RUNLOG variable, or runs.db here.
 The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, or work/picture.json here.
+The models file is private too: --models-file PATH, or the KB_MODELS variable, or work/models.json here.
+A model on this machine is asked freely. Any other needs --allow NAME, for that one run.
 """
 
 from __future__ import annotations
@@ -93,6 +101,39 @@ def main(argv: list[str] | None = None) -> int:
     x = ps.add_parser("town"); x.add_argument("--out", default="work/town.html"); x.add_argument("--title")
     x.add_argument("--lang", choices=["en", "ar"], default="en"); x.add_argument("--today")
     x.add_argument("--quiet-days", type=int, default=90)
+    mfile = os.environ.get("KB_MODELS", "work/models.json")
+    runlog = os.environ.get("KB_RUNLOG", "runs.db")
+
+    def asking(x):
+        x.add_argument("--models-file", default=mfile, help="the models file")
+        x.add_argument("--allow", action="append", default=[], metavar="NAME",
+                       help="let this run send to a model that is not on this machine")
+        x.add_argument("--today", help="the date to count from (YYYY-MM-DD), default today")
+        x.add_argument("--json", action="store_true")
+        x.add_argument("--runlog", default=runlog, help="record the run in this run log")
+        x.add_argument("--no-log", action="store_true", help="do not record the run")
+
+    x = ps.add_parser("advise"); asking(x)
+    x.add_argument("--model", help="which model writes the advice, default the file's default")
+    x.add_argument("--models", help="several, as a,b,c: each writes its own, and the run log holds them side by side")
+    x.add_argument("--project", help="advise on this one project instead of the whole picture")
+    x.add_argument("--top", type=int, default=7); x.add_argument("--lang", choices=["en", "ar"], default="en")
+    x.add_argument("--show-prompt", action="store_true", help="print what would be sent, and send nothing")
+    md = sub.add_parser("models", help="the models kb may ask, and the gate")
+    md.add_argument("--file", default=mfile)
+    ms = md.add_subparsers(dest="mod_cmd", required=True)
+    x = ms.add_parser("init"); x.add_argument("--url", default=None); x.add_argument("--force", action="store_true")
+    ms.add_parser("list")
+    x = ms.add_parser("check"); x.add_argument("name", nargs="?")
+    x.add_argument("--allow", action="append", default=[], metavar="NAME")
+    x = ms.add_parser("pick"); x.add_argument("run"); x.add_argument("name"); x.add_argument("--db", default=runlog)
+    so = sub.add_parser("scout", help="read saved sources against your picture")
+    so.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
+    so.add_argument("--ledger", default=os.environ.get("KB_SCOUT", "work/scout.jsonl"))
+    ss = so.add_subparsers(dest="scout_cmd", required=True)
+    x = ss.add_parser("read"); asking(x); x.add_argument("paths", nargs="+", help="saved files, or folders of them")
+    x.add_argument("--model"); x.add_argument("--again", action="store_true", help="ask again about sources read before")
+    x = ss.add_parser("log"); x.add_argument("--today"); x.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -133,11 +174,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
-    if a.cmd == "picture":
+    if a.cmd in ("picture", "models", "scout"):
+        from .models import ModelError, Refused
         try:
-            return _picture(a, dump)
+            return {"picture": _picture, "models": _models, "scout": _scout}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
+            return 2
+        except Refused as e:                                # the gate: nothing left this machine
+            print(str(e), file=sys.stderr)
+            return 3
+        except ModelError as e:
+            print(f"error: {e}", file=sys.stderr)
             return 2
 
     from .graph import PlantGraph
@@ -236,6 +284,8 @@ def _picture(a, dump) -> int:
         return 0
     pic = Picture.load(a.file)
     today = date.fromisoformat(a.today) if getattr(a, "today", None) else None
+    if a.pic_cmd == "advise":
+        return _advise(a, dump, pic, today)
     if a.pic_cmd == "show":
         dump(reports.summary(pic))
     elif a.pic_cmd == "overlaps":
@@ -254,6 +304,200 @@ def _picture(a, dump) -> int:
         from .picture import town
         path = town.write(pic, a.out, today=today, title=a.title, lang=a.lang, quiet_days=a.quiet_days)
         print(f"{path}: {len(pic.cards)} projects in {len(pic.by_area())} areas. Open it in a browser. It is private: it holds your picture.")
+    return 0
+
+
+def _open_log(a, task: str, label: str, subject: str):
+    """(log, run) for a command that asks a model, or (None, None) with --no-log."""
+    if a.no_log:
+        return None, None
+    from .runlog import RunLog
+    log = RunLog(a.runlog)
+    return log, log.start(task, label=label, subject=subject)
+
+
+def _advise(a, dump, pic, today) -> int:
+    from datetime import date
+    from . import models
+    from .picture import advise as adv
+    today = today or date.today()
+    book = models.load(a.models_file)
+    chosen = book.pick(a.models or a.model)
+    project = None
+    if a.project:
+        found = pic.resolve(a.project)
+        if len(found) != 1:
+            raise KeyError(f"'{a.project}' does not name one project. The picture holds: "
+                           f"{', '.join(c['name'] for c in pic.cards.values())}.")
+        project = found[0]
+    if not pic.cards:
+        raise KeyError("the picture holds no cards yet. Add some with: kb picture add CARDS.md")
+    plans = []
+    for m in chosen:                                        # every destination is checked before anything is sent
+        lines, left = adv.evidence(pic, m.budget, today, project)
+        system, user = adv.prompt(lines, left, today, a.top, a.lang, pic.name(project) if project else None)
+        if a.show_prompt:
+            host, where = models.place(m.url)
+            print(f"--- to {m.name} ({m.model}) at {host}, {where}: {len(system) + len(user):,} characters. "
+                  f"Nothing was sent.\n\n{system}\n\n{user}\n")
+            continue
+        models.gate(m, a.allow, len(system) + len(user), f"{len(lines)} lines from your cards and the rule reports over them")
+        plans.append(m)
+    if a.show_prompt:
+        return 0
+    log, run = _open_log(a, "advise", ",".join(m.name for m in chosen), pic.name(project) if project else "whole picture")
+    results, failed = [], 0
+    for m in plans:
+        try:
+            r = adv.advise(pic, m, allow=a.allow, today=today, top=a.top, lang=a.lang, project=project)
+        except models.ModelError as e:
+            failed += 1
+            results.append({"worker": m.name, "model": m.model, "error": str(e)})
+            if run:
+                run.record("advise", worker=m.name, version=m.model, status="failed", error=str(e))
+            continue
+        results.append(r)
+        if run:
+            run.record("advise", worker=m.name, version=r["model"], subject=r["project"] or "whole picture",
+                       input={"evidence": r["evidence"], "left_out": r["lines_left_out"]},
+                       output={"advice": r["advice"], "dropped": r["dropped"], "warnings": r["warnings"]},
+                       duration_ms=r["ms"], tokens_in=r["tokens_in"], tokens_out=r["tokens_out"], cost=r["cost"],
+                       scores=r["scores"], where=r["where"])
+    if run:
+        run.end("failed" if failed == len(plans) else "ok")
+    if a.json:
+        dump({"run": run.id if run else None, "results": results})
+    else:
+        for r in results:
+            print(f"# Advice\n\n{r['worker']} ({r['model']}) gave nothing: {r['error']}" if "error" in r else adv.advice_md(r))
+            print()
+        if run and len(plans) > 1:
+            print(f"Recorded as {run.id} in {a.runlog}. When you have chosen the one you would act on:\n"
+                  f"  kb models pick {run.id} NAME")
+        elif run:
+            print(f"Recorded as {run.id} in {a.runlog}.")
+    return 2 if failed == len(plans) else 0
+
+
+def _models(a, dump) -> int:
+    from . import models
+    from .models import config
+    if a.mod_cmd == "init":
+        if os.path.exists(a.file) and not a.force:
+            raise KeyError(f"{a.file} is already there. Edit it, or add --force to write it again.")
+        url = (a.url or config.LOCAL_URL).rstrip("/")
+        probe = config.Model("probe", "openai", url, "probe", timeout=5)
+        found, note = [], ""
+        if models.place(url)[1] == models.HERE:
+            try:
+                found = models.offered(probe)
+            except models.ModelError:
+                note = (f"No runtime answered at {url}, so the file names no local model yet. Start your runtime "
+                        f"and run this again with --force, or put a model's name in by hand.")
+        else:
+            note = f"{url} is not this machine, so kb did not ask it what it has. Fill the model name in by hand."
+        os.makedirs(os.path.dirname(a.file) or ".", exist_ok=True)
+        with open(a.file, "w", encoding="utf-8") as f:
+            json.dump(config.example(found, url), f, indent=1)
+            f.write("\n")
+        print(f"{a.file} written" + (f" with {len(found[:6])} local models from {url}: {', '.join(found[:6])}." if found else "."))
+        if note:
+            print(note)
+        print("It holds no key and never should. The \"key\" entry is used only when a run says --allow key.")
+        return 0
+    book = models.load(a.file)
+    if a.mod_cmd == "list":
+        rows = []
+        for m in book.models.values():
+            host, where = models.place(m.url)
+            rows.append({"name": m.name, "default": m.name == book.default, "model": m.model, "host": host,
+                         "where": where, "asked_freely": models.allowed(m), "protocol": m.protocol,
+                         "key_from": m.key_env, "budget_chars": m.budget})
+        dump(rows)
+        return 0
+    if a.mod_cmd == "check":
+        out, bad = [], 0
+        for m in ([book.get(a.name)] if a.name else book.models.values()):
+            host, where = models.place(m.url)
+            row = {"name": m.name, "model": m.model, "host": host, "where": where}
+            if not models.allowed(m, a.allow):
+                row["result"] = f"not asked: it is not on this machine. To check it, add --allow {m.name}"
+                out.append(row)
+                continue
+            try:
+                if m.protocol == "openai":
+                    have = models.offered(m, a.allow)
+                    row["runtime_offers"] = have
+                    if m.model not in have:
+                        row["note"] = f"the runtime does not list '{m.model}'"
+                ans = models.ask(m, "You are a connection test.", "Reply with the single word: ready", allow=a.allow,
+                                 sending="a connection test, nothing of yours")
+                row.update(result="answered", said=ans.text.strip()[:60], ms=ans.ms, answered_by=ans.model)
+            except models.ModelError as e:
+                bad += 1
+                row["result"] = f"failed: {e}"
+            out.append(row)
+        dump(out)
+        return 1 if bad else 0
+    if a.mod_cmd == "pick":
+        from .runlog import RunLog, Step, query
+        if not os.path.exists(a.db):
+            raise KeyError(f"no run log at {a.db} (use --db PATH or set KB_RUNLOG)")
+        log = RunLog(a.db)
+        run = log.get(a.run)
+        steps = [s for s in query.show(log, run.id)["steps"] if s["worker"] and s["status"] == "ok"]
+        names = [s["worker"] for s in steps]
+        if a.name not in names:
+            raise KeyError(f"'{a.name}' gave no answer in {run.id}. Those that did: {', '.join(names) or 'none'}.")
+        if any("picked" in s["scores"] for s in steps):
+            raise KeyError(f"a pick is already recorded for {run.id}.")
+        for s in steps:
+            Step(run, s["id"]).score("picked", 1.0 if s["worker"] == a.name else 0.0, note="chosen by a person")
+        print(f"Recorded: {a.name} was picked over {', '.join(n for n in names if n != a.name) or 'no other'} in {run.id}. "
+              f"See the standing with: kb log --db {a.db} workers --score picked")
+        return 0
+    return 0
+
+
+def _scout(a, dump) -> int:
+    from datetime import date
+    from . import models, scout
+    from .picture import Picture
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    ledger = scout.Ledger(a.ledger)
+    if a.scout_cmd == "log":
+        rows = ledger.rows()
+        dump({"open": scout.open_now(rows, today), "rows": rows}) if a.json else print(scout.log_md(rows, today))
+        return 0
+    pic = Picture.load(a.file)
+    if not pic.cards:
+        raise KeyError("the picture holds no cards yet. Add some with: kb picture add CARDS.md")
+    m = models.load(a.models_file).get(a.model)
+    files = scout.sources(a.paths)
+    if not files:
+        raise KeyError(f"no .txt, .md or .html file in: {', '.join(a.paths)}")
+    chars = sum(min(len(scout.read_source(f)), m.budget) for f in files)
+    models.gate(m, a.allow, chars, f"{len(files)} saved sources and one line about each of your projects")   # before any run or line
+    log, run = _open_log(a, "scout", m.name, f"{len(files)} sources")
+    rows = scout.watch(pic, files, m, ledger, allow=a.allow, today=today, again=a.again)
+    if run:
+        for r in rows:
+            if r.get("seen_before") or "ms" not in r and r["verdict"] != "error":
+                continue
+            v = r["verdict"]
+            run.record("read", worker=m.name, version=r.get("model") or m.model, subject=os.path.basename(r["source"]),
+                       status="failed" if v == "error" else "ok", error=r.get("reason") if v == "error" else None,
+                       output={k: r.get(k) for k in ("verdict", "what", "for", "quote", "deadline", "reason", "notes")},
+                       duration_ms=r.get("ms"), tokens_in=r.get("tokens_in"), tokens_out=r.get("tokens_out"),
+                       cost=r.get("cost"), scores=None if v == "error" else {
+                           "said_chance": float(v in ("opportunity", "unchecked", "closed")),
+                           "confirmed": float(v in ("opportunity", "closed"))})
+        run.end()
+    if a.json:
+        dump({"run": run.id if run else None, "rows": rows})
+    else:
+        print(scout.scout_md(rows, today))
+        print(f"\nEvery reading is kept in {a.ledger}. See it all with: kb scout log")
     return 0
 
 
