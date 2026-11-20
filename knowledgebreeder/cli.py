@@ -8,6 +8,7 @@
     kb whatif   work/plant/kg isolate P-101     valves to close around it
     kb whatif   work/plant/kg spof              single points of failure, ranked
     kb research work/plant/kg                   questions worth checking
+    kb walk     work/plant/kg --out work/plant.html   the plant as one page, what-if on click, opens offline
     kb score    work/plant/kg gold.json         score against a checked gold file
 
     kb log runs                                 recent runs, with cost and scores
@@ -49,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("brief"); b.add_argument("graph"); b.add_argument("tag")
     w = sub.add_parser("whatif"); w.add_argument("graph"); w.add_argument("action", choices=["fail", "isolate", "spof"])
     w.add_argument("tag", nargs="?")
+    wk = sub.add_parser("walk"); wk.add_argument("graph"); wk.add_argument("--out", default="work/plant.html")
+    wk.add_argument("--title"); wk.add_argument("--lang", choices=["en", "ar"], default="en")
     sc = sub.add_parser("score"); sc.add_argument("graph"); sc.add_argument("gold")
     sc.add_argument("--log", help="append the headline numbers to this ledger (JSON lines)")
     sc.add_argument("--label", default="run"); sc.add_argument("--note", default="")
@@ -151,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
             dump(q) if a.json else print(research.to_markdown(q))
         elif a.cmd == "brief":
             print(synthesis.brief(pg, a.tag))
+        elif a.cmd == "walk":
+            from . import walk
+            path = walk.write(pg, a.out, title=a.title, lang=a.lang)
+            print(f"{path}: {len(pg.of_type('Equipment', 'Component', 'Instrument', 'Boundary'))} items. "
+                  "Open it in a browser. It is private: it holds your plant.")
         elif a.cmd == "whatif":
             if a.action == "spof":
                 dump(manipulation.single_points(pg))
