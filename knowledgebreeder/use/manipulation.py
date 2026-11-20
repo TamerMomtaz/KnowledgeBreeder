@@ -33,35 +33,47 @@ def _supplied(flow: nx.DiGraph, sources: set[str]) -> set[str]:
     return seen
 
 
-def fail(pg: PlantGraph, tag: str) -> dict:
-    nid = pg.find(tag)
+def context(pg: PlantGraph) -> tuple[nx.DiGraph, set[str], set[str]]:
+    """The flow view, its sources and what they supply. Worked out once when many what-ifs are asked."""
     flow = pg.flow()
     sources = _sources(pg, flow)
-    before = _supplied(flow, sources)
-    cut = flow.copy()
-    if nid in cut:
-        cut.remove_node(nid)
+    return flow, sources, _supplied(flow, sources)
+
+
+def fail_sets(pg: PlantGraph, nid: str, ctx: tuple | None = None) -> dict:
+    """What fail() finds, as node ids, for callers that draw the answer."""
+    flow, sources, before = ctx or context(pg)
+    cut = nx.subgraph_view(flow, filter_node=lambda n: n != nid)
     lost = before - _supplied(cut, sources - {nid}) - {nid}
     affected = lost | {nid}
     blind = sorted({i for n in affected for i in pg.measured_by(n)} |
                    {n for n in affected if pg.node(n).get("type") == "Instrument"})
     loops = sorted({l for n in list(affected) + blind for l in pg.loops_of(n)})
+    below = nx.descendants(flow, nid) if nid in flow else set()
+    return {"lost": lost, "blind": blind, "loops": loops,
+            "spared": {n for n in below - lost if is_equipment(pg, n)}}
+
+
+def fail(pg: PlantGraph, tag: str) -> dict:
+    nid = pg.find(tag)
+    s = fail_sets(pg, nid)
+    lost = s["lost"]
     return {
         "failed": pg.label(nid), "sheet": sheet(pg, nid),
         "loses_supply": {"equipment": sorted(pg.label(n) for n in lost if pg.node(n).get("type") == "Equipment"),
                          "sinks": sorted(pg.label(n) for n in lost if pg.node(n).get("type") == "Boundary"),
                          "other_items": len([n for n in lost if not is_equipment(pg, n)])},
-        "still_supplied_by_another_path": sorted(pg.label(n) for n in pg.downstream(nid) - lost if is_equipment(pg, n)),
-        "instruments_blind": [pg.label(i) for i in blind],
-        "loops_affected": [pg.label(l) for l in loops],
+        "still_supplied_by_another_path": sorted(pg.label(n) for n in s["spared"]),
+        "instruments_blind": [pg.label(i) for i in s["blind"]],
+        "loops_affected": [pg.label(l) for l in s["loops"]],
     }
 
 
-def isolate(pg: PlantGraph, tag: str) -> dict:
-    nid = pg.find(tag)
-    und = pg.flow().to_undirected()
+def isolate_sets(pg: PlantGraph, nid: str, flow: nx.DiGraph | None = None) -> dict | None:
+    """What isolate() finds, as node ids. None when the item is on no process line."""
+    und = (flow if flow is not None else pg.flow()).to_undirected(as_view=True)
     if nid not in und:
-        raise KeyError(f"'{tag}' is not on any process line in this graph")
+        return None
     valves, open_ends, inside, todo = set(), set(), {nid}, [nid]
     while todo:
         for n in und.neighbors(todo.pop()):
@@ -74,12 +86,20 @@ def isolate(pg: PlantGraph, tag: str) -> dict:
             else:
                 inside.add(n)
                 todo.append(n)
+    return {"valves": valves, "open_ends": open_ends, "inside": inside - {nid}}
+
+
+def isolate(pg: PlantGraph, tag: str) -> dict:
+    nid = pg.find(tag)
+    s = isolate_sets(pg, nid)
+    if s is None:
+        raise KeyError(f"'{tag}' is not on any process line in this graph")
     return {
         "item": pg.label(nid), "sheet": sheet(pg, nid),
-        "close": [{"tag": pg.label(v), "kind": kind(pg, v), "sheet": sheet(pg, v)} for v in sorted(valves)],
-        "no_valve_before": sorted(pg.label(n) for n in open_ends),
-        "isolable": not open_ends,
-        "also_inside_the_envelope": sorted(pg.label(n) for n in inside - {nid}
+        "close": [{"tag": pg.label(v), "kind": kind(pg, v), "sheet": sheet(pg, v)} for v in sorted(s["valves"])],
+        "no_valve_before": sorted(pg.label(n) for n in s["open_ends"]),
+        "isolable": not s["open_ends"],
+        "also_inside_the_envelope": sorted(pg.label(n) for n in s["inside"]
                                            if pg.node(n).get("type") in ("Component", "Instrument")),
     }
 

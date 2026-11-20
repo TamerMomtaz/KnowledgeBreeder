@@ -22,7 +22,7 @@ kb = "knowledgebreeder.cli:main"
 include = ["knowledgebreeder*"]
 
 [tool.setuptools.package-data]
-knowledgebreeder = ["picture/*.html", "picture/*.md"]
+knowledgebreeder = ["picture/*.html", "picture/*.md", "walk/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

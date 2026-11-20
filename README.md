@@ -22,6 +22,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `seed/pid-to-kg/` | Scott Duncan's [pid-to-kg](https://github.com/ScottDuncanAI/PID-to-Knowledge-Graph) Claude skill, unchanged. Claude reads each sheet; scripts build `graph.json`. | Upstream v0.1.0 |
 | `knowledgebreeder/readers/` | Plug-in readers. The first one, `vector_geometry`, pulls the pipe network straight out of a vector PDF as exact coordinates: runs, tees, boxes, symbols, tags. | Tested on synthetic pages only |
 | `knowledgebreeder/use/` | The four use modules, all working on `graph.json`. | Tested on a demo plant |
+| `knowledgebreeder/walk/` | Walk the plant: the graph drawn as one page that opens offline. Pick an item and see what stops with it or which valves box it in. | Tested on a demo plant; not yet on a real one |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
 | `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, and a town you can open offline. Not tied to P&IDs. | Tested on invented cards; word matching only, no model yet |
@@ -80,6 +81,38 @@ kb read drawing.pdf --page 3 --out skeleton_p3.json
   It works on a copy and never edits the graph.
 - **Research** (`kb research`): process-design rules turned into questions. A pump with no discharge pressure gauge, a
   vessel with no level instrument, a control valve in no loop, parallel pumps of unknown duty. Each says where to look.
+
+## Walk the plant
+
+`kb walk` draws the graph as one HTML file. The source is on the left and the sink on the right. Branches sit in
+rows under the line they leave, instruments are circles above what they measure, and a recycle runs back under
+the plant.
+
+```bash
+kb walk tests/fixtures/demo_graph.json --out work/demo-plant.html
+```
+
+```bash
+kb walk work/<plant>/kg --out work/plant.html --lang ar
+```
+
+Pick an item to read it, then choose **If it stops** or **To isolate it**. The page greys out what loses its
+supply, marks the instruments that go blind, colours the valves to close and outlines the equipment no valve
+shuts it off from. The mode stays on while you walk, so each step down the line shows what that item would take
+with it. The arrow keys walk the line, and every item is also a plain button in a list.
+
+What the marks mean: a dashed pipe is a flow direction the reader guessed, a dashed outline is an item read with
+low confidence, a number is how many items starve if that one stops, and a question mark is an open question
+from `kb research`. Single points, the questions and the numbers are in the same file.
+
+Every answer on the page is worked out by the same code as `kb whatif`, for every item, when the file is made.
+The page only shows them. It switches between English and Arabic.
+
+Limits: kb chose where things stand. Only the connections come from your drawing, so the page will not look
+like your P&ID. The whole plant is one drawing with no split by sheet, which gets long for a large plant. A line
+that crosses another is drawn straight over it. The what-if answers are connectivity only, as everywhere in the
+use layer. The file holds your plant, so treat it as private. It asks the network for nothing, and a content
+security policy inside it forbids it. Arabic covers the page's own words, not tags, kinds or the questions.
 
 ## The run log
 
