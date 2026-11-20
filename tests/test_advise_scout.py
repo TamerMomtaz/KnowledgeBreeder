@@ -17,7 +17,7 @@ from knowledgebreeder import models, scout
 from knowledgebreeder.cli import main
 from knowledgebreeder.models import client
 from knowledgebreeder.models.config import Model
-from knowledgebreeder.picture import Picture, advise
+from knowledgebreeder.picture import Picture, advise, lessons
 from knowledgebreeder.runlog import RunLog, query
 
 from standin import StandIn
@@ -196,6 +196,83 @@ def test_a_model_that_fails_is_recorded_as_failed(tmp_path, capsys):
         assert [(s["worker"], s["status"]) for s in steps] == [("small", "ok"), ("big", "failed")]
         log.close()
         assert main(base + ["--model", "big"]) == 2                              # nobody answered
+
+
+# ---- lessons and ratings -----------------------------------------------------------------------------------
+def test_lessons_are_read_in_the_persons_words_and_grow_one_line_at_a_time(tmp_path):
+    f = tmp_path / "work" / "lessons.md"
+    assert lessons.read(f) == []
+    f.parent.mkdir()
+    f.write_text("# my rules\n\n- [2026-11-01] Quiet is not dead.\n2. Ask before   naming a client.\n"
+                 "<!-- a note to self -->\n* لا تقترح بيع الآلة\nNo bullet, still a lesson", encoding="utf-8")
+    assert lessons.read(f) == ["Quiet is not dead.", "Ask before naming a client.", "لا تقترح بيع الآلة",
+                               "No bullet, still a lesson"]
+    have, new = lessons.add(f, "  Finish before   starting. ", TODAY)
+    assert new and have[-1] == "Finish before starting." and f.read_text(encoding="utf-8").endswith(
+        "No bullet, still a lesson\n- [2026-11-20] Finish before starting.\n")
+    assert lessons.add(f, "quiet is NOT dead.", TODAY) == (have, False)     # the same lesson is not added twice
+    with pytest.raises(KeyError):
+        lessons.add(f, "   ", TODAY)
+    fresh = tmp_path / "elsewhere" / "lessons.md"
+    lessons.add(fresh, "One rule.", TODAY)
+    assert fresh.read_text(encoding="utf-8").startswith("# Lessons for kb's advice") and lessons.read(fresh) == ["One rule."]
+    kept, old = lessons.fit(["a" * 50, "b" * 50, "c" * 50], room=120)      # the newest are kept, in file order
+    assert kept == ["b" * 50, "c" * 50] and old == 1
+
+
+def test_lessons_go_in_as_rules_and_never_as_evidence(pic):
+    lines, left = advise.evidence(pic, 8_000, TODAY)
+    system, user = advise.prompt(lines, left, TODAY, lessons=["Quiet is not dead.", "Keep 50% for the bakery."])
+    assert "outrank your own judgment" in system and "L1 Quiet is not dead.\nL2 Keep 50% for the bakery." in system
+    assert "Quiet is not dead" not in user and system.index("L2 ") < system.index("Reply with one JSON object")
+    bare, _ = advise.prompt(lines, left, TODAY)
+    assert "lessons" not in bare and "No praise, no filler.\n\nReply with" in bare
+
+
+def test_a_run_follows_the_lessons_and_a_rating_becomes_a_score(tmp_path, capsys, monkeypatch):
+    with StandIn(adviser) as sv:
+        pic, mfile, db, _ = _setup(tmp_path, sv, monkeypatch, far=True)
+        lf = str(tmp_path / "w" / "lessons.md")
+        assert main(["picture", "lesson", "--lessons", lf]) == 0
+        assert "0 lessons" in capsys.readouterr().out
+        assert main(["picture", "lesson", "--lessons", lf, "--today", "2026-11-20", "Quiet", "is", "not", "dead."]) == 0
+        assert main(["picture", "lesson", "--lessons", lf, "Do not suggest archiving a project for being quiet."]) == 0
+        assert "Added. 2 lessons" in capsys.readouterr().out
+        base = ["picture", "--file", pic, "advise", "--models-file", mfile, "--runlog", db, "--today", "2026-11-20",
+                "--lessons", lf]
+
+        assert main(base + ["--model", "far"]) == 3                               # the gate says what would go
+        assert "and your 2 lessons" in capsys.readouterr().err and sv.seen == []
+        assert main(base + ["--models", "small,big"]) == 0
+        out = capsys.readouterr().out
+        assert out.count("following 2 of your lessons") == 2 and "kb picture rate" in out
+        run_id = re.search(r"kb picture rate (run_\w+)", out).group(1)
+        assert all("L2 Do not suggest archiving" in p["body"]["messages"][0]["content"] for p in sv.posts())
+        assert main(base + ["--model", "small", "--no-lessons", "--no-log"]) == 0
+        assert "lessons" not in sv.posts()[-1]["body"]["messages"][0]["content"]
+        assert "following" not in capsys.readouterr().out
+
+        rate = ["picture", "rate", "--runlog", db, run_id]
+        assert main(rate + ["1"]) == 2 and "Say whose with --worker NAME: small, big" in capsys.readouterr().err
+        assert main(rate + ["3", "--worker", "small"]) == 2 and "numbered 1 to 2" in capsys.readouterr().err
+        assert main(rate + ["one", "--worker", "small"]) == 2 and "the word none" in capsys.readouterr().err
+        assert main(rate + ["1", "--worker", "nobody"]) == 2 and "gave no answer" in capsys.readouterr().err
+        assert main(rate + ["1,", "--worker", "small", "--why", "the class needs it"]) == 0
+        assert "act on 1 of 2 pieces from small" in capsys.readouterr().out
+        assert main(rate + ["2", "--worker", "small"]) == 2 and "already recorded" in capsys.readouterr().err
+        assert main(rate + ["none", "--worker", "big"]) == 0
+        capsys.readouterr()
+
+        log = RunLog(db)
+        run = query.show(log, run_id, payloads=True)
+        assert [s["input"]["lessons"] for s in run["steps"]] == [["Quiet is not dead.",
+                                                                    "Do not suggest archiving a project for being quiet."]] * 2
+        assert [(s["worker"], s["scores"]["would_act"]) for s in run["steps"]] == [("small", 0.5), ("big", 0.0)]
+        note = log.db.execute("SELECT note FROM scores WHERE name = 'would_act' ORDER BY id").fetchone()[0]
+        assert note == "would act on 1 of 2. Why: the class needs it"
+        board = query.workers(log, task="advise", score="would_act")
+        assert [(w["worker"], w["scores"]["would_act"]) for w in board] == [("small", 0.5), ("big", 0.0)]
+        log.close()
 
 
 # ---- the scout ----------------------------------------------------------------------------------------------

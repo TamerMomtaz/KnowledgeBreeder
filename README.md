@@ -25,7 +25,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/walk/` | Walk the plant: the graph drawn as one page that opens offline. Pick an item and see what stops with it or which valves box it in. | Tested on a demo plant; not yet on a real one |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
-| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model and held to the cards. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server only, not yet with a real model |
+| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run once for real on a local model offline |
 | `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. | Tested against a stand-in server only |
 | `knowledgebreeder/scout/` | The scout: reads pages you saved against your projects, keeps what the text itself shows, and keeps a ledger of everything it read and passed over. | Tested against a stand-in server only |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
@@ -344,6 +344,46 @@ Over time the run log shows which model you keep choosing:
 kb log workers --task advise --score picked
 ```
 
+### Teach it, run by run
+
+A model repeats its habits. When a piece of advice is wrong for a reason that will come back, write the reason down
+once, in your own words:
+
+```bash
+kb picture lesson "Quiet is not dead. Do not suggest archiving a project only because it has been quiet."
+```
+
+Lessons live in one private file, `work/lessons.md`, one per line. Edit or delete lines by hand whenever you like.
+List them with `kb picture lesson`. Every advice run sends them as standing rules that outrank the model's own
+judgment, and says at the top how many it followed. They are rules, not evidence, so no piece of advice may cite one.
+If there are more than about 4,000 characters of lessons, the newest are sent and kb says how many older ones were
+left out. A lesson goes wherever the advice goes: to a model off this machine only with `--allow NAME`, and the
+refusal counts your lessons in what would have been sent.
+
+After a run, mark the pieces you would act on, by their numbers:
+
+```bash
+kb picture rate RUN 1 6
+```
+
+Add `--why "..."` to keep a reason with it, `--worker NAME` when the run asked several models, or the word `none`
+when you would act on none. The share of pieces you would act on is stored as the score `would_act`. If the lessons
+work, it rises run by run:
+
+```bash
+kb log workers --task advise --score would_act
+```
+
+To see what the lessons change, ask the same question without them:
+
+```bash
+kb picture advise --no-lessons
+```
+
+kb cannot check that a model followed a lesson. Your rating is that check. Each run records the lessons it was given,
+so a lesson that does not raise the share can be found and rewritten. Nothing here retrains a model: the lessons are
+read again on every run, and you can see and change every word.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:
@@ -367,9 +407,9 @@ kb scout log
 It lists the chances still open today, and every source the scout passed over with the reason it gave. If a real
 chance sits under "Passed over", the scout missed it, and now you know.
 
-Limits: none of this has run against a real model yet. The tests use a stand-in server that returns canned answers,
-so they prove what kb does with an answer, good or bad, and say nothing about how good a real model's advice is.
-That takes a first run on your own machine. The checks catch a citation to a line that was never sent, a quote that
+Limits: advice has run against one real model so far, a 27-billion-parameter model on a laptop, offline (November
+2026). The scout has not run against a real model yet. The tests use a stand-in server that returns canned answers,
+so they prove what kb does with an answer, good or bad, and say nothing about how good a real model's advice is. The checks catch a citation to a line that was never sent, a quote that
 is not in the source, and a figure or deadline that is not there. They do not catch advice that cites real lines and
 is still wrong, so a person reads it and signs. The scout reads what you save. It does not search the web, and no
 tool can promise that no chance is ever missed. It checks a deadline's day and year against the quoted words, not

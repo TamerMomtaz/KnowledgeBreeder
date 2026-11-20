@@ -22,7 +22,9 @@
     kb picture overlaps / gaps / reuse          the same idea twice, what is missing, what could travel
     kb picture brief                            a short list of moves worth a look
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
-    kb picture advise                           advice written by a model, held to your own cards
+    kb picture advise                           advice written by a model, held to your own cards and your lessons
+    kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
+    kb picture rate RUN 1 6                     mark the pieces you would act on; the share is kb's score
 
     kb models init / list / check               which models kb may ask, and where each one lives
     kb models pick RUN NAME                     record which model's answer you chose
@@ -33,6 +35,7 @@ The graph argument is a graph.json, or the folder holding one.
 The run log is one SQLite file: --db PATH, or the KB_RUNLOG variable, or runs.db here.
 The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, or work/picture.json here.
 The models file is private too: --models-file PATH, or the KB_MODELS variable, or work/models.json here.
+Your lessons are one private Markdown file: --lessons PATH, or the KB_LESSONS variable, or work/lessons.md here.
 A model on this machine is asked freely. Any other needs --allow NAME, for that one run.
 """
 
@@ -119,6 +122,17 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--project", help="advise on this one project instead of the whole picture")
     x.add_argument("--top", type=int, default=7); x.add_argument("--lang", choices=["en", "ar"], default="en")
     x.add_argument("--show-prompt", action="store_true", help="print what would be sent, and send nothing")
+    lfile = os.environ.get("KB_LESSONS", "work/lessons.md")
+    x.add_argument("--lessons", default=lfile, help="your lessons file, which every run follows")
+    x.add_argument("--no-lessons", action="store_true", help="leave your lessons out of this run, to compare")
+    x = ps.add_parser("lesson", help="add one lesson, or list them")
+    x.add_argument("text", nargs="*", help="the lesson, in your own words; none lists the lessons")
+    x.add_argument("--lessons", default=lfile); x.add_argument("--today")
+    x = ps.add_parser("rate", help="mark which pieces of a run's advice you would act on")
+    x.add_argument("run"); x.add_argument("pieces", nargs="+", help="the numbers of the pieces you would act on, or: none")
+    x.add_argument("--worker", help="whose answer, when the run holds several")
+    x.add_argument("--why", help="a short reason, kept with the rating")
+    x.add_argument("--runlog", default=runlog)
     md = sub.add_parser("models", help="the models kb may ask, and the gate")
     md.add_argument("--file", default=mfile)
     ms = md.add_subparsers(dest="mod_cmd", required=True)
@@ -282,6 +296,10 @@ def _picture(a, dump) -> int:
         out["saved"] = str(pic.save(a.file)); out["cards"] = len(pic.cards)
         dump(out)
         return 0
+    if a.pic_cmd == "lesson":
+        return _lesson(a)
+    if a.pic_cmd == "rate":
+        return _rate(a)
     pic = Picture.load(a.file)
     today = date.fromisoformat(a.today) if getattr(a, "today", None) else None
     if a.pic_cmd == "advise":
@@ -332,16 +350,18 @@ def _advise(a, dump, pic, today) -> int:
         project = found[0]
     if not pic.cards:
         raise KeyError("the picture holds no cards yet. Add some with: kb picture add CARDS.md")
+    from .picture import lessons as les
+    taught, old = ([], 0) if a.no_lessons else les.fit(les.read(a.lessons))
     plans = []
     for m in chosen:                                        # every destination is checked before anything is sent
         lines, left = adv.evidence(pic, m.budget, today, project)
-        system, user = adv.prompt(lines, left, today, a.top, a.lang, pic.name(project) if project else None)
+        system, user = adv.prompt(lines, left, today, a.top, a.lang, pic.name(project) if project else None, taught)
         if a.show_prompt:
             host, where = models.place(m.url)
             print(f"--- to {m.name} ({m.model}) at {host}, {where}: {len(system) + len(user):,} characters. "
                   f"Nothing was sent.\n\n{system}\n\n{user}\n")
             continue
-        models.gate(m, a.allow, len(system) + len(user), f"{len(lines)} lines from your cards and the rule reports over them")
+        models.gate(m, a.allow, len(system) + len(user), adv.sending(len(lines), len(taught)))
         plans.append(m)
     if a.show_prompt:
         return 0
@@ -349,7 +369,7 @@ def _advise(a, dump, pic, today) -> int:
     results, failed = [], 0
     for m in plans:
         try:
-            r = adv.advise(pic, m, allow=a.allow, today=today, top=a.top, lang=a.lang, project=project)
+            r = adv.advise(pic, m, allow=a.allow, today=today, top=a.top, lang=a.lang, project=project, lessons=taught)
         except models.ModelError as e:
             failed += 1
             results.append({"worker": m.name, "model": m.model, "error": str(e)})
@@ -359,7 +379,7 @@ def _advise(a, dump, pic, today) -> int:
         results.append(r)
         if run:
             run.record("advise", worker=m.name, version=r["model"], subject=r["project"] or "whole picture",
-                       input={"evidence": r["evidence"], "left_out": r["lines_left_out"]},
+                       input={"evidence": r["evidence"], "left_out": r["lines_left_out"], "lessons": r["lessons"]},
                        output={"advice": r["advice"], "dropped": r["dropped"], "warnings": r["warnings"]},
                        duration_ms=r["ms"], tokens_in=r["tokens_in"], tokens_out=r["tokens_out"], cost=r["cost"],
                        scores=r["scores"], where=r["where"])
@@ -368,15 +388,84 @@ def _advise(a, dump, pic, today) -> int:
     if a.json:
         dump({"run": run.id if run else None, "results": results})
     else:
+        if old:
+            print(f"Note: {old} older lessons in {a.lessons} did not fit and were not sent. Shorten or merge some.\n")
         for r in results:
             print(f"# Advice\n\n{r['worker']} ({r['model']}) gave nothing: {r['error']}" if "error" in r else adv.advice_md(r))
             print()
         if run and len(plans) > 1:
             print(f"Recorded as {run.id} in {a.runlog}. When you have chosen the one you would act on:\n"
-                  f"  kb models pick {run.id} NAME")
+                  f"  kb models pick {run.id} NAME\n"
+                  f"and mark its pieces you would act on:\n"
+                  f"  kb picture rate {run.id} 1 2 --worker NAME")
         elif run:
-            print(f"Recorded as {run.id} in {a.runlog}.")
+            print(f"Recorded as {run.id} in {a.runlog}. Mark the pieces you would act on, for example:\n"
+                  f"  kb picture rate {run.id} 1 2")
     return 2 if failed == len(plans) else 0
+
+
+def _lesson(a) -> int:
+    from datetime import date
+
+    from .picture import lessons as les
+    if not a.text:
+        have = les.read(a.lessons)
+        print(f"{len(have)} lesson{'' if len(have) == 1 else 's'} in {a.lessons}" + (":\n" + les.numbered(have) if have else
+              '. Add one with: kb picture lesson "your rule, in your own words"'))
+        return 0
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    have, new = les.add(a.lessons, " ".join(a.text), today)
+    _kept, old = les.fit(have)
+    print(("Added. " if new else "That lesson is already there. ") + f"{len(have)} lesson{'' if len(have) == 1 else 's'} "
+          f"in {a.lessons}; "
+          f"every advice run follows them" + (f", except the {old} oldest, which no longer fit" if old else "") + ".")
+    return 0
+
+
+def _rate(a) -> int:
+    from .runlog import RunLog, Step, query
+    if not os.path.exists(a.runlog):
+        raise KeyError(f"no run log at {a.runlog} (use --runlog PATH or set KB_RUNLOG)")
+    log = RunLog(a.runlog)
+    run = log.get(a.run)
+    shown = query.show(log, run.id, payloads=True)
+    if shown["task"] != "advise":
+        raise KeyError(f"{run.id} is a {shown['task']} run, not advice.")
+    steps = [s for s in shown["steps"] if s["name"] == "advise" and s["status"] == "ok" and s["worker"]]
+    names = [s["worker"] for s in steps]
+    if a.worker:
+        steps = [s for s in steps if s["worker"] == a.worker]
+    if not names:
+        raise KeyError(f"nobody answered in {run.id}, so there is nothing to rate.")
+    if a.worker and not steps:
+        raise KeyError(f"'{a.worker}' gave no answer in {run.id}. Those that did: {', '.join(names)}.")
+    if len(steps) > 1:
+        raise KeyError(f"{run.id} holds several answers. Say whose with --worker NAME: {', '.join(names)}.")
+    s = steps[0]
+    advice = s["output"].get("advice") if isinstance(s["output"], dict) else None
+    if not advice:
+        raise KeyError(f"{s['worker']} showed no advice in {run.id}, so there is nothing to rate.")
+    if "would_act" in s["scores"]:
+        raise KeyError(f"a rating is already recorded for {s['worker']} in {run.id}.")
+    n = len(advice)
+    if [p.lower() for p in a.pieces] == ["none"]:
+        act = []
+    else:
+        try:
+            act = sorted({int(p.strip(",")) for p in a.pieces})
+        except ValueError:
+            raise KeyError("give the numbers of the pieces you would act on, as 1 6, or the word none.") from None
+        if act[0] < 1 or act[-1] > n:
+            raise KeyError(f"{s['worker']} showed {n} pieces in {run.id}, numbered 1 to {n}.")
+    note = f"would act on {', '.join(map(str, act)) or 'none'} of {n}" + (f". Why: {a.why}" if a.why else "")
+    Step(run, s["id"]).score("would_act", len(act) / n, note=note)
+    log.close()
+    print(f"Recorded: you would act on {len(act)} of {n} pieces from {s['worker']} in {run.id} "
+          f"({round(100 * len(act) / n)}%). If the loop works, this share rises run by run. Watch it with:\n"
+          f"  kb log --db {a.runlog} workers --task advise --score would_act\n"
+          f"If a piece was wrong for a reason that will come back, teach kb once:\n"
+          f"  kb picture lesson \"your rule, in your own words\"")
+    return 0
 
 
 def _models(a, dump) -> int:
