@@ -13,7 +13,8 @@ dependencies = ["pypdfium2>=4.30", "networkx>=3.2"]
 
 [project.optional-dependencies]
 seed = ["pillow>=10.0", "pydantic>=2.6", "duckdb>=1.1"]
-dev = ["pytest>=8", "reportlab>=4"]
+key = ["anthropic>=2.11"]
+dev = ["pytest>=8", "reportlab>=4", "anthropic>=2.11"]
 
 [project.scripts]
 kb = "knowledgebreeder.cli:main"
