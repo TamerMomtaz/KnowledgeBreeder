@@ -6,3 +6,5 @@ work/
 *.db
 *.db-wal
 *.db-shm
+build/
+dist/
