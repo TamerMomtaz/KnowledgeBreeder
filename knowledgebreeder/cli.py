@@ -16,8 +16,15 @@
     kb log compare RUN_A RUN_B                  what got better or worse, and where
     kb log start / step / end                   record work done outside kb (a model call, a person)
 
+    kb picture add cards.md                     merge project cards into your picture
+    kb picture show                             how many cards, in which areas
+    kb picture overlaps / gaps / reuse          the same idea twice, what is missing, what could travel
+    kb picture brief                            a short list of moves worth a look
+    kb picture town --out work/town.html        the picture as a town, one file, opens offline
+
 The graph argument is a graph.json, or the folder holding one.
 The run log is one SQLite file: --db PATH, or the KB_RUNLOG variable, or runs.db here.
+The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, or work/picture.json here.
 """
 
 from __future__ import annotations
@@ -67,6 +74,22 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--cost", type=float); x.add_argument("--status", default="ok"); x.add_argument("--error")
     x.add_argument("--input-file"); x.add_argument("--output-file")
     x.add_argument("--score", action="append", default=[], metavar="NAME=VALUE")
+    pc = sub.add_parser("picture", help="the whole picture: one person's projects as one graph")
+    pc.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"),
+                    help="the picture (a picture.json, or a cards file to read on the spot)")
+    ps = pc.add_subparsers(dest="pic_cmd", required=True)
+    x = ps.add_parser("add"); x.add_argument("cards", nargs="*", help="files holding PROJECT CARDs")
+    x.add_argument("--area", action="append", default=[], help="name an area that has no card yet")
+    ps.add_parser("show")
+    for name in ("overlaps", "gaps", "reuse", "brief"):
+        x = ps.add_parser(name); x.add_argument("--json", action="store_true")
+        if name in ("gaps", "brief"):
+            x.add_argument("--today", help="the date to count from (YYYY-MM-DD), default today")
+        if name == "gaps":
+            x.add_argument("--quiet-days", type=int, default=90)
+    x = ps.add_parser("town"); x.add_argument("--out", default="work/town.html"); x.add_argument("--title")
+    x.add_argument("--lang", choices=["en", "ar"], default="en"); x.add_argument("--today")
+    x.add_argument("--quiet-days", type=int, default=90)
     a = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -107,6 +130,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
+    if a.cmd == "picture":
+        try:
+            return _picture(a, dump)
+        except KeyError as e:
+            print(f"error: {e.args[0]}", file=sys.stderr)
+            return 2
 
     from .graph import PlantGraph
     from .use import manipulation, research, statistics, synthesis
@@ -175,6 +204,49 @@ def _load(path: str | None):
         return json.loads(text)
     except ValueError:
         return text
+
+
+def _picture(a, dump) -> int:
+    from datetime import date
+    from .picture import Picture, cards, reports
+    if a.pic_cmd == "add":
+        if not a.cards and not a.area:
+            raise KeyError("give at least one cards file, or --area NAME")
+        pic = Picture.load(a.file) if os.path.exists(a.file) else Picture()
+        out = {"added": [], "updated": [], "areas_added": [], "no_cards_in": []}
+        for path in a.cards:
+            found = cards.parse_file(path)
+            if not found:
+                out["no_cards_in"].append(path)
+            res = pic.add(found)
+            out["added"] += res["added"]; out["updated"] += res["updated"]
+        out["areas_added"] = [n for n in a.area if pic.add_area(n)]
+        if not a.file.lower().endswith(".json"):
+            raise KeyError(f"--file must be a .json file to save into, got {a.file}")
+        out["saved"] = str(pic.save(a.file)); out["cards"] = len(pic.cards)
+        dump(out)
+        return 0
+    pic = Picture.load(a.file)
+    today = date.fromisoformat(a.today) if getattr(a, "today", None) else None
+    if a.pic_cmd == "show":
+        dump(reports.summary(pic))
+    elif a.pic_cmd == "overlaps":
+        o = reports.overlaps(pic)
+        dump(o) if a.json else print(reports.overlaps_md(o))
+    elif a.pic_cmd == "gaps":
+        g = reports.gaps(pic, today, a.quiet_days)
+        dump(g) if a.json else print(reports.gaps_md(g))
+    elif a.pic_cmd == "reuse":
+        r = reports.reuse(pic)
+        dump(r) if a.json else print(reports.reuse_md(r))
+    elif a.pic_cmd == "brief":
+        b = reports.brief(pic, today)
+        dump(b) if a.json else print(reports.brief_md(b))
+    elif a.pic_cmd == "town":
+        from .picture import town
+        path = town.write(pic, a.out, today=today, title=a.title, lang=a.lang, quiet_days=a.quiet_days)
+        print(f"{path}: {len(pic.cards)} projects in {len(pic.by_area())} areas. Open it in a browser. It is private: it holds your picture.")
+    return 0
 
 
 def _log(a, dump) -> int:

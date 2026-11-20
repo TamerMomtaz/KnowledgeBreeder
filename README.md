@@ -24,6 +24,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/use/` | The four use modules, all working on `graph.json`. | Tested on a demo plant |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
+| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, and a town you can open offline. Not tied to P&IDs. | Tested on invented cards; word matching only, no model yet |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
 
 ## Quick start
@@ -129,6 +130,80 @@ time, tokens and cost. `compare` names the subjects where the challenger got wor
 
 Limits: token and cost numbers are whatever the caller reports; the log does not measure them. Inputs and outputs
 over 256,000 characters are stored as a hash and a preview. `compare` assumes a higher score is better.
+
+## The whole picture
+
+The same idea as the plant graph, pointed at a person. A plant is equipment tied by pipes. A person's work is
+projects tied by what they share, need and could lend each other. `kb picture` reads that from **cards**.
+
+A card is what one project says about itself under fixed headings: what exists, what it can do, what it needs,
+what is unfinished, what could travel, what it links to. Any assistant that holds a project can write one with
+the prompt in `knowledgebreeder/picture/inventory-prompt.md`, and you can write one by hand for anything that
+lives in no tool. "unknown" is kept as a fact and never filled in.
+
+Try it on the invented example:
+
+```bash
+kb picture --file tests/fixtures/demo_cards.md brief
+```
+
+```bash
+kb picture --file tests/fixtures/demo_cards.md town --out work/demo-town.html
+```
+
+With your own cards, merge them into your picture first. Adding a card again replaces the older one.
+
+```bash
+kb picture add my-cards.md
+```
+
+```bash
+kb picture add --area "Painting"
+```
+
+```bash
+kb picture overlaps
+```
+
+```bash
+kb picture gaps
+```
+
+```bash
+kb picture reuse
+```
+
+```bash
+kb picture brief
+```
+
+```bash
+kb picture town --out work/town.html --lang ar
+```
+
+- **Overlaps**: the same idea in more than one project (from each card's recurring themes), overlaps the cards
+  state themselves ("same list, kept twice"), and projects described in similar words.
+- **Gaps**: needs not met, work started and not finished, decisions waiting, things a card names that have no card,
+  a name that fits two cards, areas you named and never described, projects tied to nothing, projects gone quiet,
+  and everything left as unknown.
+- **Reuse**: a part one card offers to a named project, a part that may answer a need elsewhere, and parts offered
+  to everything.
+- **Brief**: a short list of moves worth a look, each with why and the card and heading it came from.
+- **Town**: the picture as one HTML file. An area is a district and a project is a building. Height is how many
+  other projects it is tied to. Lit windows mean recent work. A flag is a decision waiting and a crane is unfinished
+  work. An area with no card is an empty lot. Pick a building to read its card and see what it is tied to. The four
+  reports are in the same file. It switches between English and Arabic, works by keyboard, and every project is
+  also a plain button in a list.
+
+Your picture is private. It is one local file, `work/picture.json` by default, and `work/` is ignored by git.
+The town file holds your picture too, so treat it the same way. The page asks the network for nothing, and a
+content security policy inside it forbids it.
+
+Limits: everything here is counting and word matching over your cards. It does not understand them, it does not
+call a model, and it does not look outside the picture. A "word match" is a hint to look, not a finding. Names are
+tied to cards by their words, so a card can carry an `aliases:` line to help, and a name that fits two cards is
+reported, not guessed. The Arabic labels cover the page, not the text of your cards or the sentences in the
+reports.
 
 ## Limits, plainly
 
