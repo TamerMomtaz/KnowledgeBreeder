@@ -428,7 +428,7 @@ def _models(a, dump) -> int:
                 if m.protocol == "openai":
                     have = models.offered(m, a.allow)
                     row["runtime_offers"] = have
-                    if m.model not in have:
+                    if not ({m.model, f"{m.model}:latest", m.model.removesuffix(":latest")} & set(have)):
                         row["note"] = f"the runtime does not list '{m.model}'"
                 ans = models.ask(m, "You are a connection test.", "Reply with the single word: ready", allow=a.allow,
                                  sending="a connection test, nothing of yours")

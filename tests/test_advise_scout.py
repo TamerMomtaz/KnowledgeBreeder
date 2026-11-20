@@ -95,6 +95,18 @@ def test_a_reply_is_held_to_the_evidence(pic):
     assert dated["kept"][0]["figures_not_in_source"] == []                      # today's date is known to the prompt
 
 
+def test_figures_written_in_words_or_other_digits_are_known():
+    lines = [advise.Line("E1", "Fifty-nine small repos, last work in March. Twenty one albums.", "Papers · header", ()),
+             advise.Line("E2", "١٣٨ عملا منشورا", "AIRED · header", ())]
+    said = lambda move, cite: advise.ground({"advice": [{"move": move, "cites": [cite]}]}, lines, TODAY)["kept"][0]
+    assert said("Archive the 59 repos.", "E1")["figures_not_in_source"] == []
+    assert said("Keep the 21 albums.", "E1")["figures_not_in_source"] == []
+    assert said("Archive the 60 repos.", "E1")["figures_not_in_source"] == ["60"]
+    assert said("Count the 138 works.", "E2")["figures_not_in_source"] == []
+    assert said("Count the ١٣٩ works.", "E2")["figures_not_in_source"] == ["139"]
+    assert said("Take one small step.", "E2")["figures_not_in_source"] == []   # a word in the answer is not a figure
+
+
 def test_advice_from_a_local_model(pic):
     with StandIn(adviser) as sv:
         m = Model("local", "openai", sv.url + "/v1", "small")

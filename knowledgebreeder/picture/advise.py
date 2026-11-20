@@ -177,8 +177,31 @@ def prompt(lines: list[Line], left_out: int, today: date, top: int = 7, lang: st
     return system, f"{head}\n\nEvidence:\n{body}{tail}"
 
 
-def _figures(text: str) -> set[str]:
-    return {re.sub(r"[,.]", "", m) for m in _FIGURE.findall(text)}
+_ONES = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+         "seventeen eighteen nineteen").split()
+_TENS = "twenty thirty forty fifty sixty seventy eighty ninety".split()
+_WORD = {w: i for i, w in enumerate(_ONES)} | {w: 20 + 10 * i for i, w in enumerate(_TENS)}
+_NUMBER_WORDS = re.compile(r"\b(" + "|".join(_TENS) + r")(?:[-\s](" + "|".join(_ONES[1:10]) + r"))?\b"
+                           r"|\b(" + "|".join(_ONES) + r")\b", re.I)
+
+
+def _digits(text: str) -> str:
+    """Any script's digits as 0-9, so a card that says ١٣٨ and an answer that says 138 agree."""
+    return "".join(str(int(ch)) if ch.isdecimal() and not ch.isascii() else ch for ch in text)
+
+
+def _figures(text: str, words: bool = False) -> set[str]:
+    """The figures in a text. With words, "fifty-nine" counts as 59 too: used on the evidence side only, so an
+    answer that says "one small step" is not flagged for a figure it never wrote."""
+    text = _digits(text)
+    found = {re.sub(r"[,.]", "", m) for m in _FIGURE.findall(text)}
+    if words:
+        for m in _NUMBER_WORDS.finditer(text):
+            if m.group(1):
+                found.add(str(_WORD[m.group(1).lower()] + (_WORD[m.group(2).lower()] if m.group(2) else 0)))
+            else:
+                found.add(str(_WORD[m.group(3).lower()]))
+    return found
 
 
 def ground(reply, lines: list[Line], today: date, top: int = 7) -> dict:
@@ -203,7 +226,8 @@ def ground(reply, lines: list[Line], today: date, top: int = 7) -> dict:
             continue
         text = lambda k: " ".join(str(it.get(k) or "").split())
         said = " ".join(text(k) for k in ("move", "why", "first_step"))
-        known = _figures(" ".join(by_id[c].text + " " + by_id[c].source for c in cites) + " " + today.isoformat())
+        known = _figures(" ".join(by_id[c].text + " " + by_id[c].source for c in cites) + " " + today.isoformat(),
+                         words=True)
         kept.append({"move": text("move"), "why": text("why"), "first_step": text("first_step"),
                      "kind": it.get("kind") if it.get("kind") in KINDS else "do", "cites": cites,
                      "source": list(dict.fromkeys(by_id[c].source for c in cites)),
