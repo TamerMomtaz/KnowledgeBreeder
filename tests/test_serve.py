@@ -143,6 +143,9 @@ def test_ticks_picks_and_lessons_save_from_the_phone(served):
     assert ask(kb, "POST", "/api/pick", {"run": run_id, "worker": "nobody"}, o)[0] == 400
     assert ask(kb, "POST", "/api/pick", {"run": run_id, "worker": "big"}, o)[0] == 200
     assert ask(kb, "POST", "/api/pick", {"run": run_id, "worker": "small"}, o)[0] == 400
+    ts = {"Origin": "https://artgate.tail1234.ts.net"}                             # through tailscale serve,
+    assert ask(kb, "POST", "/api/lesson", {"text": "Kept from the phone."}, ts)[0] == 200    # Host rewritten or not
+    assert ask(kb, "POST", "/api/lesson", {"text": "Kept twice."}, ts, host="artgate.tail1234.ts.net")[0] == 200
 
     log = RunLog(db)
     notes = {s["worker"]: s["scores"] for s in query.show(log, run_id)["steps"]}
@@ -158,7 +161,7 @@ def test_ticks_picks_and_lessons_save_from_the_phone(served):
     code, _, said = ask(kb, "POST", "/api/lesson", {"text": "quiet is not dead."}, o)
     assert code == 200 and json.loads(said)["new"] is False
     assert ask(kb, "POST", "/api/lesson", {"text": "   "}, o)[0] == 400
-    assert lessons.read(kb.lessons) == ["Quiet is not dead."]
+    assert lessons.read(kb.lessons) == ["Kept from the phone.", "Kept twice.", "Quiet is not dead."]
     assert "Quiet is not dead." in ask(kb, "GET", "/")[2]
 
 

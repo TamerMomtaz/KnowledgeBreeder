@@ -294,8 +294,9 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if self.headers.get("X-KB") != "1":
             return self._json(403, {"error": "kb takes changes only from its own pages."})
-        origin = self.headers.get("Origin")
-        if origin and urlsplit(origin).netloc.lower() != (self.headers.get("Host") or "").lower():
+        origin = urlsplit(self.headers.get("Origin") or "").netloc.lower()
+        if origin and origin != (self.headers.get("Host") or "").lower() and not host_ok(origin, self.kb.port):
+            # a proxy may pass the Host on or rewrite it to 127.0.0.1; either way the page must come from here
             return self._json(403, {"error": "kb takes changes only from its own pages."})
         if not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self._json(415, {"error": "send JSON."})
