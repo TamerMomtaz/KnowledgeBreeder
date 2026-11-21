@@ -120,3 +120,55 @@ def example(local_models: list[str] | None = None, url: str = LOCAL_URL) -> dict
                      "fallbacks": "default", "price_in": 4.0, "price_out": 20.0,
                      "note": "Used only when you add --allow key to a run. The key stays in your environment."}
     return {"default": "local", "models": models}
+
+
+# Ready entries for the providers kb knows, checked against each provider's own pages on 2026-11-21. Prices move,
+# and a provider may rename its models: kb models check NAME --allow NAME lists what the key can really use.
+PRESETS: dict[str, dict[str, Any]] = {
+    "openai": {"entry": {"protocol": "openai", "url": "https://api.openai.com/v1", "model": "gpt-6.2-sol",
+                         "key_env": "OPENAI_API_KEY", "budget": 60_000, "price_in": 2.0, "price_out": 10.0},
+               "key_page": "https://platform.openai.com/api-keys",
+               "data": "OpenAI says API data is not used for training by default, and is kept up to 30 days."},
+    "gemini": {"entry": {"protocol": "openai", "url": "https://generativelanguage.googleapis.com/v1beta/openai",
+                         "model": "gemini-4-argon", "key_env": "GEMINI_API_KEY", "budget": 60_000},
+               "key_page": "https://aistudio.google.com/apikey",
+               "data": "Turn billing on for this key. On the free tier Google uses what you send to improve its "
+                       "products; on the paid tier it does not. kb could not confirm this model's price, so the run "
+                       "log shows no cost for it until you add price_in and price_out to the entry."},
+    "kimi": {"entry": {"protocol": "openai", "url": "https://api.moonshot.ai/v1", "model": "kimi-k3.1-pro",
+                       "key_env": "MOONSHOT_API_KEY", "budget": 60_000},
+             "key_page": "https://platform.kimi.ai/console/api-keys",
+             "data": "Moonshot says API data is not used to train its models. It does not say where the data is "
+                     "kept. Its docs do not list model names, so check that kimi-k3.1-pro is among them."},
+    "deepseek": {"entry": {"protocol": "openai", "url": "https://api.deepseek.com", "model": "deepseek-flash",
+                           "key_env": "DEEPSEEK_API_KEY", "budget": 60_000, "price_in": 0.30, "price_out": 1.20},
+                 "key_page": "https://platform.deepseek.com/api_keys",
+                 "data": "DeepSeek's privacy policy says it stores data in China and may use it to train its models; "
+                         "its API terms do not promise otherwise. Think before sending it cards about client work."},
+    "claude": {"entry": {"protocol": "anthropic", "url": CLAUDE_API, "model": "claude-sonnet-5-5",
+                         "key_env": "ANTHROPIC_API_KEY", "budget": 60_000, "price_in": 2.0, "price_out": 10.0},
+               "key_page": "https://platform.claude.com/settings/keys",
+               "data": "Anthropic does not train on API data by default. API use is billed apart from a claude.ai "
+                       "plan. It needs the Anthropic SDK: pip install -e \".[key]\"."},
+}
+
+
+def add_preset(path: str | Path, name: str, as_name: str | None = None, model: str | None = None,
+               force: bool = False) -> tuple[Model, dict[str, Any]]:
+    """Write one provider's entry into the models file, keeping every other entry as it is."""
+    if name not in PRESETS:
+        raise KeyError(f"kb has no ready entry for '{name}'. It knows: {', '.join(PRESETS)}.")
+    p = Path(path)
+    data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"default": None, "models": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("models"), dict):
+        raise KeyError(f"{p} must hold an object with a \"models\" object inside.")
+    as_name = as_name or name
+    if as_name in data["models"] and not force:
+        raise KeyError(f"{p} already has an entry called '{as_name}'. Add --force to write it again.")
+    entry = dict(PRESETS[name]["entry"], **({"model": model} if model else {}))
+    data["models"][as_name] = entry
+    data["default"] = data.get("default") or next(iter(data["models"]))
+    m = _entry(as_name, entry, str(p))
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    return m, PRESETS[name]
