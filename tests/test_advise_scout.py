@@ -157,7 +157,8 @@ def test_advise_command_refuses_shows_and_records(tmp_path, capsys, monkeypatch)
         assert main(base + ["--models", "small,far,big", "--allow", "far"]) == 0
         out = capsys.readouterr().out
         assert out.count("# Advice") == 3 and "Written by far (small) on outside" in out
-        run_id = re.search(r"kb models pick (run_\w+) NAME", out).group(1)
+        run_id = re.search(r"kb models pick (run_\w+) followed by small or far or big\.", out).group(1)
+        assert "kb picture page --runlog" in out and f"kb picture rate --runlog {db} {run_id} --worker far\n" in out
         log = RunLog(db)
         run = query.show(log, run_id, payloads=True)
         assert run["task"] == "advise" and run["subject"] == "whole picture" and run["status"] == "ok"
@@ -246,7 +247,7 @@ def test_a_run_follows_the_lessons_and_a_rating_becomes_a_score(tmp_path, capsys
         assert main(base + ["--models", "small,big"]) == 0
         out = capsys.readouterr().out
         assert out.count("following 2 of your lessons") == 2 and "kb picture rate" in out
-        run_id = re.search(r"kb picture rate (run_\w+)", out).group(1)
+        run_id = re.search(r"kb picture rate --runlog \S+ (run_\w+) --worker small", out).group(1)
         assert all("L2 Do not suggest archiving" in p["body"]["messages"][0]["content"] for p in sv.posts())
         assert main(base + ["--model", "small", "--no-lessons", "--no-log"]) == 0
         assert "lessons" not in sv.posts()[-1]["body"]["messages"][0]["content"]
@@ -429,3 +430,102 @@ def test_scout_command(tmp_path, capsys, monkeypatch):
         assert main(base + ["log", "--json"]) == 0
         assert len(json.loads(capsys.readouterr().out)["rows"]) == 3
         assert main(base + ["read", str(tmp_path / "none")] + tail) == 2
+
+
+# ---- one page for every model's advice -----------------------------------------------------------------------
+def two_minds(model, system, user):
+    """Two models that agree on one idea in different words, and each say things the other does not."""
+    def e(needle):
+        return _eid(user, needle)
+    if model == "small":
+        advice = [
+            {"move": "Send the bakery's customer list to the Saturday class.", "why": "The class needs past customers.",
+             "cites": [e("customer list with phone numbers"), e("a list of past customers")],
+             "first_step": "Export the list tonight.", "kind": "join"},
+            {"move": "Finish cards seven to twelve before the next class.", "why": "Students take the cards home.",
+             "cites": [e("cards seven to twelve"), e("students take them home")], "first_step": "Sketch card seven.",
+             "kind": "do"},
+            {"move": "</script><script>alert(1)</script> Keep customers in one place.", "why": "They are kept twice.",
+             "cites": [e("kept twice / same")], "first_step": "List both.", "kind": "join"}]
+    else:
+        advice = [
+            {"move": "Decide on Ramadan prices this week.", "why": "The order book waits on it.",
+             "cites": [e("raise prices in Ramadan")], "first_step": "Write both prices down.", "kind": "decide"},
+            {"move": "Invite the order book's past customers to the Saturday class.",
+             "why": "The class asked for a list of past customers, and the bakery has one.",
+             "cites": [e("customer list with phone numbers"), e("a list of past customers"), e("uses its customers")],
+             "first_step": "Pick ten names.", "kind": "join"},
+            {"move": "Hire 3 drivers for deliveries.", "why": "Nobody delivers yet.", "cites": [e("a delivery driver")],
+             "first_step": "Ask around.", "kind": "do"}]
+    return json.dumps({"advice": advice})
+
+
+def test_the_page_puts_every_model_in_one_list_and_writes_the_commands(tmp_path, capsys):
+    from knowledgebreeder.picture import page
+    with StandIn(two_minds) as sv:
+        pic, mfile, db, _ = _setup(tmp_path, sv)
+        assert main(["picture", "--file", pic, "advise", "--models-file", mfile, "--runlog", db, "--today", "2026-11-20",
+                     "--models", "small,big"]) == 0
+        out = capsys.readouterr().out
+    run_id = re.search(r"Recorded as (run_\w+)", out).group(1)
+    assert f"kb picture page --runlog {db} --open" in out                        # the page is offered first
+
+    assert main(["picture", "page", "RUN", "--runlog", db]) == 2                  # a stand-in typed as it is
+    assert "no run is called 'RUN'. A run id looks like run_" in capsys.readouterr().err
+    path = tmp_path / "advice.html"
+    assert main(["picture", "page", "--runlog", db, "--out", str(path), "--today", "2026-11-21"]) == 0
+    said = capsys.readouterr().out
+    assert said.startswith(f"{path}: 6 pieces from small, big; 1 idea came from more than one model.")
+    doc = path.read_text(encoding="utf-8")
+    order = re.findall(r'<article class="piece"[^>]*data-worker="(\w+)" data-n="(\d)"', doc)
+    assert order == [("small", "1"), ("big", "2"), ("big", "1"), ("small", "2"), ("small", "3"), ("big", "3")]
+    assert doc.count('<section class="group">') == 1                             # the shared idea, first, together
+    assert len(re.findall(r'<input type="checkbox" data-worker="\w+" data-n="\d">', doc)) == 6   # each keeps its own box
+    assert "<script>alert(1)" not in doc and doc.count("<script") == 2           # model text cannot become markup
+    assert not re.search(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", doc) and "default-src 'none'" in doc
+    assert "Check: 3 is in none of the lines it cites." in doc and "This run followed no lessons." in doc
+    assert 'data-worker="small" data-total="3"' in doc and "Which answer is better overall?" in doc
+    data = json.loads(re.search(r'<script id="data" type="application/json">(.*?)</script>', doc, re.S).group(1))
+    assert data["run"] == run_id and data["multi"] is True and data["log"] == db
+    assert "a list of past customers to invite" in doc                          # the cited lines, there to check
+
+    assert main(["picture", "rate", "--runlog", db, run_id, "--worker", "small", "1", "3"]) == 0
+    assert main(["models", "--file", mfile, "pick", run_id, "big", "--db", db]) == 0
+    capsys.readouterr()
+    assert main(["picture", "page", run_id[:10], "--runlog", db, "--out", str(path), "--lang", "ar"]) == 0
+    doc = path.read_text(encoding="utf-8")
+    assert '<html lang="ar" dir="rtl">' in doc and set(page.LABELS["ar"]) == set(page.LABELS["en"])
+    assert re.findall(r'<input type="checkbox" (checked )?disabled data-worker="small" data-n="(\d)"', doc) == [
+        ("checked ", "1"), ("", "2"), ("checked ", "3")]                        # what you said, kept and shown
+    plain = re.sub("[\u2066-\u2069]", "", doc)                                    # values are isolated in Arabic
+    assert "سُجّل: ستعمل بـ 1, 3 من 3 (67٪)." in plain and "سُجّل: اخترت big." in plain
+    assert "\u2068run_" in doc
+    assert "<bdi>67%</bdi>" in doc and "★" in doc and 'name="pick"' not in doc   # the run is in the history
+
+    with StandIn(two_minds) as sv:                                               # one model: no pick, no --worker
+        book = json.loads(Path(mfile).read_text())
+        book["models"]["small"]["url"] = sv.url + "/v1"
+        Path(mfile).write_text(json.dumps(book))
+        assert main(["picture", "--file", pic, "advise", "--models-file", mfile, "--runlog", db, "--model", "small"]) == 0
+    assert f"kb picture rate --runlog {db} run_" in capsys.readouterr().out
+    assert main(["picture", "page", "--runlog", db, "--out", str(path)]) == 0
+    doc = path.read_text(encoding="utf-8")
+    one = json.loads(re.search(r'<script id="data" type="application/json">(.*?)</script>', doc, re.S).group(1))
+    assert one["run"] != run_id and one["multi"] is False and 'name="pick"' not in doc
+
+
+def test_pieces_are_joined_across_models_never_within_one():
+    def piece(worker, n, lines, words):
+        return {"worker": worker, "n": n, "_lines": frozenset(lines), "_words": page_words(words)}
+    from knowledgebreeder.picture import page
+    page_words = page._words
+    a = {"worker": "a", "pieces": [piece("a", 1, ["L1", "L2"], "send the customer list"),
+                                   piece("a", 2, ["L1", "L2"], "send the customer list again")]}
+    b = {"worker": "b", "pieces": [piece("b", 1, ["L9"], "decide prices"),
+                                   piece("b", 2, ["L1", "L2"], "share the customer list")]}
+    c = {"worker": "c", "pieces": [piece("c", 1, ["L1"], "customer list for the class")]}
+    groups = page.group([a, b, c])
+    shape = [[(p["worker"], p["n"]) for p in g] for g in groups]
+    assert shape[0] == [("a", 1), ("b", 2), ("c", 1)]                            # one idea, three models
+    assert [("a", 2)] in shape and [("b", 1)] in shape and len(shape) == 3
+    assert page.likeness(b["pieces"][0], c["pieces"][0]) is None
