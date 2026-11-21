@@ -26,6 +26,7 @@ from importlib import resources
 from pathlib import Path
 
 from ..runlog import RunLog, query
+from . import trail
 
 HUES = (208, 152, 28, 276, 332, 96, 46, 184)
 _WORD = re.compile(r"\w+")
@@ -56,22 +57,34 @@ LABELS = {
         "here": "on this machine", "network": "on your network", "outside": "outside this machine",
         "lessons_h": "Lessons this run followed", "no_lessons": "This run followed no lessons.",
         "record_h": "Record what you think",
-        "record_note": "Tick the pieces you would act on. The commands fill in by themselves. Paste each one in "
-                       "your terminal, in the KnowledgeBreeder folder.",
+        "record_note": "Tick the pieces you would act on. To say an idea your way, open Change it under the idea. "
+                       "The commands fill in by themselves. Paste each one in your terminal, in the KnowledgeBreeder "
+                       "folder.",
         "none_from": "None of these", "why_ph": "Why, in a few words (optional)",
         "ticked": "{k} of {n} ticked", "empty": "Nothing ticked yet.",
         "pick_h": "Which answer is better overall?", "pick_note": "This is a separate vote from the ticks.",
-        "rated": "Recorded: you would act on {list} of {n} ({p}%).", "picked_done": "Recorded: you picked {w}.",
+        "rated": "Recorded: you would act on {list} ({k} of {n}, {p}%).", "picked_done": "Recorded: you picked {w}.",
         "copy": "Copy", "copied": "Copied",
-        "save": "Save", "saving": "Saving…", "save_rate": "You would act on {list} of {n} from {w}.",
+        "save": "Save", "saving": "Saving…", "save_rate": "You would act on {list} ({k} of {n}) from {w}.",
         "save_pick": "You pick {w}.", "not_saved": "Not saved: {e}", "back": "All runs",
-        "record_note_live": "Tick the pieces you would act on, then press Save. Each answer is saved once.",
+        "record_note_live": "Tick the pieces you would act on. To say an idea your way, open Change it under "
+                            "the idea. Then press Save. Each answer is saved once.",
         "history_h": "Who earns your ticks, run by run",
         "history_note": "The share of each model's pieces you said you would act on. If the loop works, it rises.",
         "history_few": "Rate a few more runs and the trend shows here.", "picked": "picked",
         "date": "Date", "run": "Run", "mean": "So far", "runs": "{n} rated",
         "private": "This file holds lines from your own cards. It makes no network requests. Keep it on this machine.",
         "made": "Made {d} with kb picture page.", "none": "none",
+        "change": "Change it", "change_ph": "Say it your way: what should this idea be instead?",
+        "keep": "Keep it as a lesson for every run", "your_change": "Your change",
+        "kept_lesson": "kept as a lesson for every run", "your_words": "Your words",
+"save_change": "With your change to {list}.", "a_lesson": "a lesson",
+        "saved_now": "Saved. This is what kb recorded:",
+        "trail_h": "Trail of this run (Vn-trail)", "trail_steps": "{k} steps",
+        "trail_note": "Who did what, step by step, read from the run log as it happened. HUMAN is you, AI is a "
+                      "model, DIALOGUE is your change to a model's idea. The eight fields follow The Vn-Trail "
+                      "(Momtaz, 2026, SSRN 6739158).",
+        "trail_cmd": "On the laptop, as a table, or one line per step for coding many runs:",
     },
     "ar": {
         "title": "النصائح جنباً إلى جنب", "lang_name": "العربية",
@@ -91,22 +104,33 @@ LABELS = {
         "here": "على هذا الجهاز", "network": "على شبكتك", "outside": "خارج هذا الجهاز",
         "lessons_h": "الدروس التي اتبعها هذا التشغيل", "no_lessons": "لم يتبع هذا التشغيل أي درس.",
         "record_h": "سجّل رأيك",
-        "record_note": "ضع علامة على النصائح التي ستعمل بها. تُكتب الأوامر وحدها. الصق كل أمر في الطرفية، "
-                       "داخل مجلد KnowledgeBreeder.",
+        "record_note": "ضع علامة على النصائح التي ستعمل بها. لتقول فكرة بطريقتك افتح «غيّرها» تحتها. "
+                       "تُكتب الأوامر وحدها. الصق كل أمر في الطرفية، داخل مجلد KnowledgeBreeder.",
         "none_from": "لا شيء من هذه", "why_ph": "لماذا، في كلمات قليلة (اختياري)",
         "ticked": "محدد: {k} من {n}", "empty": "لم تحدد شيئاً بعد.",
         "pick_h": "أي إجابة أفضل إجمالاً؟", "pick_note": "هذا تصويت منفصل عن العلامات.",
-        "rated": "سُجّل: ستعمل بـ {list} من {n} ({p}٪).", "picked_done": "سُجّل: اخترت {w}.",
+        "rated": "سُجّل: ستعمل بـ {list} ({k} من {n}، {p}٪).", "picked_done": "سُجّل: اخترت {w}.",
         "copy": "نسخ", "copied": "تم النسخ",
-        "save": "حفظ", "saving": "جارٍ الحفظ…", "save_rate": "ستعمل بـ {list} من {n} من {w}.",
+        "save": "حفظ", "saving": "جارٍ الحفظ…", "save_rate": "ستعمل بـ {list} ({k} من {n}) من {w}.",
         "save_pick": "اخترت {w}.", "not_saved": "لم يُحفظ: {e}", "back": "كل التشغيلات",
-        "record_note_live": "ضع علامة على النصائح التي ستعمل بها، ثم اضغط حفظ. كل إجابة تُحفظ مرة واحدة.",
+        "record_note_live": "ضع علامة على النصائح التي ستعمل بها. لتقول فكرة بطريقتك افتح «غيّرها» تحتها. "
+                            "ثم اضغط حفظ. كل إجابة تُحفظ مرة واحدة.",
         "history_h": "من يكسب علاماتك، تشغيلاً بعد تشغيل",
         "history_note": "نسبة نصائح كل نموذج التي قلت إنك ستعمل بها. إن نجحت الحلقة فهي ترتفع.",
         "history_few": "قيّم بضع تشغيلات أخرى وسيظهر الاتجاه هنا.", "picked": "مختار",
         "date": "التاريخ", "run": "التشغيل", "mean": "حتى الآن", "runs": "مقيّمة: {n}",
         "private": "يحمل هذا الملف أسطراً من بطاقاتك. لا يطلب شيئاً من الشبكة. أبقه على هذا الجهاز.",
         "made": "صُنع {d} بأمر kb picture page.", "none": "لا شيء",
+        "change": "غيّرها", "change_ph": "قلها بطريقتك: ماذا يجب أن تكون هذه الفكرة بدلاً من ذلك؟",
+        "keep": "احفظها درساً لكل تشغيل", "your_change": "تغييرك",
+        "kept_lesson": "محفوظة درساً لكل تشغيل", "your_words": "كلماتك",
+"save_change": "مع تغييرك على {list}.", "a_lesson": "درس",
+        "saved_now": "حُفظ. هذا ما سجّله kb:",
+        "trail_h": "مسار هذا التشغيل (Vn-trail)", "trail_steps": "الخطوات: {k}",
+        "trail_note": "من فعل ماذا، خطوة بخطوة، مقروءاً من سجل التشغيل كما حدث. HUMAN هو أنت، وAI نموذج، "
+                      "وDIALOGUE تغييرك على فكرة نموذج. الحقول الثمانية من The Vn-Trail "
+                      "(Momtaz, 2026, SSRN 6739158).",
+        "trail_cmd": "على اللابتوب، جدولاً، أو سطراً لكل خطوة لترميز تشغيلات كثيرة:",
     },
 }
 
@@ -143,8 +167,15 @@ def gather(log: RunLog, run_id: str) -> dict:
     shown = query.show(log, run_id, payloads=True)
     if shown["task"] != "advise":
         raise KeyError(f"{shown['id']} is a {shown['task']} run, not advice.")
-    notes = {(r["step_id"], r["name"]): r["note"] for r in log.db.execute(
-        "SELECT step_id, name, note FROM scores WHERE run_id = ? AND step_id IS NOT NULL", (shown["id"],))}
+    notes, own, kept = {}, {}, {}
+    for r in log.db.execute("SELECT step_id, name, value, note FROM scores WHERE run_id = ? AND step_id IS NOT NULL "
+                            "ORDER BY id", (shown["id"],)):
+        if r["name"] == "changed":
+            own.setdefault(r["step_id"], {})[int(r["value"])] = r["note"] or ""
+        elif r["name"] == "lesson_from":
+            kept.setdefault(r["step_id"], set()).add(int(r["value"]))
+        else:
+            notes[(r["step_id"], r["name"])] = r["note"]
     answers, lessons = [], []
     for s in shown["steps"]:
         if s["name"] != "advise" or not s["worker"]:
@@ -165,9 +196,13 @@ def gather(log: RunLog, run_id: str) -> dict:
                            "_lines": frozenset(" ".join(ln["text"].split()) for ln in lines),
                            "_words": _words(" ".join(str(p.get(k) or "") for k in ("move", "why", "first_step")))})
         rated = _rated(notes.get((s["id"], "would_act"))) if "would_act" in s["scores"] else None
+        why = (notes.get((s["id"], "would_act")) or "").partition(". Why: ")[2]
+        for p in pieces:
+            if p["n"] in own.get(s["id"], {}):
+                p["change"], p["kept"] = own[s["id"]][p["n"]], p["n"] in kept.get(s["id"], set())
         answers.append({**a, "pieces": pieces, "dropped": len(out.get("dropped") or []),
                         "warnings": list(out.get("warnings") or []), "lines_sent": len(ev),
-                        "left_out": inp.get("left_out") or 0, "rated": rated,
+                        "left_out": inp.get("left_out") or 0, "rated": rated, "why": why,
                         "would_act": s["scores"].get("would_act"), "picked": s["scores"].get("picked")})
     return {"run": shown["id"], "date": (shown["started"] or "")[:10], "subject": shown["subject"] or "",
             "answers": answers, "lessons": lessons}
@@ -250,8 +285,42 @@ def _piece(p: dict, lang: str, hue: int, locked: list[int] | None) -> str:
     if p.get("figures_not_in_source"):
         L.append(f'<p class="check">{_e(_t(lang, "check", f=", ".join(p["figures_not_in_source"])))}</p>')
     L.append(f'<label class="tick"><input type="checkbox" {tick}{off}data-worker="{_e(p["worker"])}" '
-             f'data-n="{p["n"]}"> <span>{_e(_t(lang, "act"))}</span></label></article>')
+             f'data-n="{p["n"]}"> <span>{_e(_t(lang, "act"))}</span></label>')
+    who = f'data-worker="{_e(p["worker"])}" data-n="{p["n"]}"'
+    if locked is None:                          # still open: say it your way, and keep it as a lesson if you like
+        L.append(f'<details class="change"><summary>{_e(_t(lang, "change"))}</summary>'
+                 f'<textarea class="change-text" {who} dir="auto" rows="3" maxlength="600" '
+                 f'placeholder="{_e(_t(lang, "change_ph"))}" aria-label="{_e(_t(lang, "change"))} #{p["n"]}"></textarea>'
+                 f'<label class="keep"><input type="checkbox" class="keep-box" {who}> '
+                 f'<span>{_e(_t(lang, "keep"))}</span></label></details>')
+    elif p.get("change"):
+        kept = f' <span class="kept">{_e(_t(lang, "kept_lesson"))}</span>' if p.get("kept") else ""
+        L.append(f'<p class="changed"><b>{_e(_t(lang, "your_change"))}:</b> <span dir="auto">{_e(p["change"])}</span>'
+                 f'{kept}</p>')
+    L.append("</article>")
     return "".join(L)
+
+
+def _trail(data: dict, lang: str) -> str:
+    """The run's Vn-trail, folded away at the bottom of the page until you open it."""
+    t = trail.entries(data, lang)
+    o = trail.origins(t)
+    sums = " · ".join([_t(lang, "trail_steps", k=len(t))] + [f"{k} {v}" for k, v in o.items() if v])
+    items = []
+    for e in t:
+        org = f'<span class="org o-{e["origin"].lower()}">{_e(e["origin"])}</span>' if e["origin"] else ""
+        rows = []
+        for f in trail.FIELDS[1:]:
+            if f != "origin" and e[f]:
+                soft = ' class="soft"' if e[f] == trail.T[lang]["none"] else ""
+                rows.append(f'<div><dt>{_e(trail.T[lang][f])}</dt><dd dir="auto"{soft}>{_e(e[f])}</dd></div>')
+        rows = "".join(rows)
+        items.append(f'<li><div class="vh"><b dir="auto">{_e(e["n"])}</b> {org}</div><dl class="vf">{rows}</dl></li>')
+    cmd = f"kb picture trail {data['run']}"
+    return (f'<details class="box" id="trail"><summary>{_e(_t(lang, "trail_h"))} '
+            f'<span class="soft">· {_e(sums)}</span></summary><p class="soft small">{_e(_t(lang, "trail_note"))}</p>'
+            f'<ol class="trail">{"".join(items)}</ol><p class="soft small">{_e(_t(lang, "trail_cmd"))}</p>'
+            f'<p class="cmds"><code dir="ltr">{_e(cmd)}</code> <code dir="ltr">{_e(cmd)} --json</code></p></details>')
 
 
 def _who(a: dict, lang: str, hue: int) -> str:
@@ -334,16 +403,25 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
     lessons = ('<ol class="lessons">' + "".join(f'<li><bdi>{_e(x)}</bdi></li>' for x in data["lessons"]) + "</ol>"
                if data["lessons"] else f'<p class="soft">{_e(_t(lang, "no_lessons"))}</p>')
     rate = []
-    for a in answers:
+    for i, a in enumerate(answers):
         if "error" in a or not a["pieces"]:
             continue
         hue = hues[a["worker"]]
-        if a["would_act"] is not None:
+        if a["would_act"] is not None:            # recorded: say back exactly what kb holds, your words included
             got = locked[a["worker"]] or []
-            rate.append(f'<div class="rate done">{_tag(a["worker"], hue)} '
-                        f'{_e(_t(lang, "rated", list=", ".join(map(str, got)) or _t(lang, "none"), n=len(a["pieces"]), p=round(100 * a["would_act"])))}</div>')
+            said = []
+            if a.get("why"):
+                said.append(f'<p class="said"><b>{_e(_t(lang, "your_words"))}:</b> <span dir="auto">{_e(a["why"])}</span></p>')
+            for p in a["pieces"]:
+                if p.get("change"):
+                    mark = f'#{p["n"]}' + (f' ({_t(lang, "a_lesson")})' if p.get("kept") else "")
+                    said.append(f'<p class="said"><b>{_e(_t(lang, "your_change"))} <bdi>{_e(mark)}</bdi>:</b> '
+                                f'<span dir="auto">{_e(p["change"])}</span></p>')
+            rate.append(f'<div class="rate done" id="rec-{i}">{_tag(a["worker"], hue)} '
+                        f'{_e(_t(lang, "rated", list=", ".join(f"#{n}" for n in got) or _t(lang, "none"), k=len(got), n=len(a["pieces"]), p=round(100 * a["would_act"])))}'
+                        f'{"".join(said)}</div>')
             continue
-        rate.append(f'<div class="rate" data-worker="{_e(a["worker"])}" data-total="{len(a["pieces"])}">'
+        rate.append(f'<div class="rate" data-worker="{_e(a["worker"])}" data-total="{len(a["pieces"])}" data-rec="rec-{i}">'
                     f'<div class="row">{_tag(a["worker"], hue, a["model"])} <span class="count"></span></div>'
                     f'<label class="none"><input type="checkbox" class="none-box"> {_e(_t(lang, "none_from"))}</label>'
                     f'<input type="text" class="reason" placeholder="{_e(_t(lang, "why_ph"))}" aria-label="{_e(_t(lang, "why_ph"))}" dir="auto">'
@@ -353,11 +431,11 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
     if len(ok) > 1:
         done = next((a["worker"] for a in answers if a["picked"] == 1.0), None)
         if done or any(a["picked"] is not None for a in answers):
-            pick = f'<div class="pick done">{_e(_t(lang, "picked_done", w=done or "?"))}</div>'
+            pick = f'<div class="pick done" id="rec-pick">{_e(_t(lang, "picked_done", w=done or "?"))}</div>'
         else:
             radios = "".join(f'<label class="radio"><input type="radio" name="pick" value="{_e(a["worker"])}"> '
                              f'{_tag(a["worker"], hues[a["worker"]], a["model"])}</label>' for a in ok)
-            pick = (f'<div class="pick"><h3>{_e(_t(lang, "pick_h"))}</h3><p class="soft small">{_e(_t(lang, "pick_note"))}</p>'
+            pick = (f'<div class="pick" data-rec="rec-pick"><h3>{_e(_t(lang, "pick_h"))}</h3><p class="soft small">{_e(_t(lang, "pick_note"))}</p>'
                     f'<div class="radios">{radios}</div>{out_box}</div>')
     blob = json.dumps({"run": data["run"], "multi": len(ok) > 1, "log": log_flag, "live": live, "labels": LABELS[lang]},
                       ensure_ascii=False).replace("<", "\\u003c")
@@ -376,6 +454,7 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
     }
     fill |= {"<!--__PIECES__-->": "".join(parts), "<!--__LESSONS__-->": lessons, "<!--__RATE__-->": "".join(rate),
              "<!--__PICK__-->": pick, "<!--__HISTORY__-->": _history(hist or [], workers, hues, lang),
+             "<!--__TRAIL__-->": _trail(data, lang),
              "/*__DATA__*/": blob}
     fill["<!--__BACK__-->"] = (f'<p class="back"><a href="/?lang={lang}">{_e(_t(lang, "back"))}</a></p>' if live else "")
     if live:                                    # the Save buttons talk to kb on the machine that served the page

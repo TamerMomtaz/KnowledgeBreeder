@@ -498,7 +498,7 @@ def test_the_page_puts_every_model_in_one_list_and_writes_the_commands(tmp_path,
     assert re.findall(r'<input type="checkbox" (checked )?disabled data-worker="small" data-n="(\d)"', doc) == [
         ("checked ", "1"), ("", "2"), ("checked ", "3")]                        # what you said, kept and shown
     plain = re.sub("[\u2066-\u2069]", "", doc)                                    # values are isolated in Arabic
-    assert "سُجّل: ستعمل بـ 1, 3 من 3 (67٪)." in plain and "سُجّل: اخترت big." in plain
+    assert "سُجّل: ستعمل بـ #1, #3 (2 من 3، 67٪)." in plain and "سُجّل: اخترت big." in plain
     assert "\u2068run_" in doc
     assert "<bdi>67%</bdi>" in doc and "★" in doc and 'name="pick"' not in doc   # the run is in the history
 

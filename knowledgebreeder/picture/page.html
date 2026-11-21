@@ -60,7 +60,18 @@ details summary{cursor:pointer;color:var(--accent);font-size:.9rem}
 .eid{font-weight:700;color:var(--ink)}
 .tick{display:flex;gap:10px;align-items:center;margin-top:8px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);cursor:pointer;min-height:44px;font-weight:600}
 .tick input,.none input,.radio input{width:20px;height:20px;accent-color:var(--accent);flex:none}
-.tick:has(input:disabled){cursor:default;opacity:.75}
+.tick:has(input:disabled){cursor:default}
+.tick:has(input:disabled:not(:checked)){opacity:.6}
+details.change{margin:8px 0 0}
+details.change summary{display:inline-flex;align-items:center;min-height:40px;padding:0 2px;font-weight:600}
+.change-text{display:block;width:100%;min-height:84px;background:var(--bg);border:1px solid var(--line);border-radius:8px;
+  padding:8px 10px;margin:4px 0;resize:vertical;font:inherit;color:inherit}
+.keep{display:flex;gap:8px;align-items:center;min-height:40px;cursor:pointer}
+.keep input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.keep:has(input:disabled){opacity:.55;cursor:default}
+.piece.edited{border-inline-start-style:double;border-inline-start-width:7px}
+.changed{margin:8px 0 0;padding:8px 10px;border-radius:10px;background:var(--on);border:1px solid var(--line)}
+.kept{display:inline-block;font-size:.82rem;font-weight:600;color:var(--accent);margin-inline-start:4px}
 .panel{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
 .rate,.pick{border-top:1px solid var(--line);padding:10px 0}
 .rate .row{display:flex;gap:8px;align-items:center;justify-content:space-between}
@@ -74,7 +85,10 @@ input.reason{width:100%;background:var(--bg);border:1px solid var(--line);border
   font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere;user-select:all;text-align:left}
 .copy{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 14px;min-height:40px;cursor:pointer;font-weight:600}
 @media (prefers-color-scheme: dark){.copy{color:#06121f}}
-.done{color:var(--soft)}
+.done{color:var(--soft);scroll-margin-top:30vh}
+.said{margin:4px 0 0;color:var(--ink)}
+.just{background:var(--on);border-radius:10px;padding-inline:10px;outline:2px solid var(--accent)}
+.now{margin:0 0 4px;font-weight:700;color:var(--ink)}
 .cmd.live{align-items:center;flex-wrap:wrap}
 .say{flex:1;min-width:0;font-weight:600}
 .save{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 18px;min-height:44px;cursor:pointer;font-weight:600}
@@ -94,6 +108,21 @@ input.reason{width:100%;background:var(--bg);border:1px solid var(--line);border
 [dir="rtl"] .bar{background:linear-gradient(to left,hsl(var(--hue) 60% 50%) calc(var(--v) * 100%),var(--line) 0)}
 .star{color:#d97706}
 #history{margin-top:8px}
+#trail summary .soft{font-weight:400}
+.trail{list-style:none;margin:10px 0 0;padding:0}
+.trail li{border-top:1px solid var(--line);padding:10px 0}
+.vh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.org{font-size:.74rem;font-weight:700;letter-spacing:.05em;border-radius:6px;padding:1px 7px;border:1px solid var(--line)}
+.o-human{color:hsl(28 80% var(--tag-l));background:hsl(28 70% var(--tag-bg-l))}
+.o-ai{color:hsl(208 70% var(--tag-l));background:hsl(208 60% var(--tag-bg-l))}
+.o-dialogue{color:hsl(276 60% var(--tag-l));background:hsl(276 50% var(--tag-bg-l))}
+.vf{margin:0;display:grid;grid-template-columns:minmax(7.5em,max-content) minmax(0,1fr);gap:2px 12px;font-size:.92rem}
+.vf div{display:contents}
+.vf dt{color:var(--soft)}
+.vf dd{margin:0;overflow-wrap:anywhere}
+@media (max-width:600px){.vf{grid-template-columns:minmax(0,1fr)}.vf dd{margin-bottom:6px}}
+.cmds code{display:inline-block;max-width:100%;overflow-wrap:anywhere;background:#0f172a;color:#e2e8f0;border-radius:6px;padding:4px 8px;margin:2px 0;
+  font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;user-select:all}
 .jump{display:none}
 @media (max-width:900px){
   .panel{position:static;max-height:none}
@@ -131,6 +160,7 @@ footer{color:var(--soft);font-size:.86rem;margin-top:24px}
 </aside>
 </div>
 <section class="box" id="history"><h2>__HISTORY_H__</h2><p class="soft small">__HISTORY_NOTE__</p><!--__HISTORY__--></section>
+<!--__TRAIL__-->
 <a class="jump" href="#record" hidden>__RECORD_H__ <span id="ready"></span></a>
 <footer><p>__PRIVATE__</p><p>__MADE__</p></footer>
 </div>
@@ -142,9 +172,16 @@ var D = JSON.parse(document.getElementById("data").textContent);
 var L = D.labels, KEY = "kb-page-" + D.run;
 function all(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
 function q(s){ return /^[A-Za-z0-9_.\/:=-]+$/.test(s) ? s : "'" + String(s).replace(/'/g, "'\\''") + "'"; }   // safe to paste in a shell
-function boxes(){ return all(".piece input[type=checkbox]:not([disabled])"); }
+function boxes(){ return all(".piece .tick input:not([disabled])"); }
 function state(){
-  var s = {ticks: {}, none: {}, why: {}, pick: null};
+  var s = {ticks: {}, none: {}, why: {}, pick: null, changes: {}, keep: {}};
+  all("textarea.change-text").forEach(function(t){
+    var w = t.getAttribute("data-worker"), n = t.getAttribute("data-n"), v = t.value.trim(),
+        k = t.parentNode.querySelector(".keep-box");
+    if (!v) return;
+    (s.changes[w] = s.changes[w] || {})[n] = v;
+    if (k.checked) (s.keep[w] = s.keep[w] || {})[n] = true;
+  });
   boxes().forEach(function(b){
     if (b.checked) (s.ticks[b.getAttribute("data-worker")] = s.ticks[b.getAttribute("data-worker")] || []).push(+b.getAttribute("data-n"));
   });
@@ -171,6 +208,19 @@ function restore(){
     if (why[w]) r.querySelector("input.reason").value = why[w];
   });
   if (s.pick) all("input[name=pick]").forEach(function(p){ if (p.value === s.pick) p.checked = true; });
+  var ch = s.changes || {}, kp = s.keep || {};
+  all("textarea.change-text").forEach(function(t){
+    var w = t.getAttribute("data-worker"), n = t.getAttribute("data-n");
+    if (ch[w] && ch[w][n]){
+      t.value = ch[w][n]; t.closest("details").open = true;
+      if (kp[w] && kp[w][n]) t.parentNode.querySelector(".keep-box").checked = true;
+    }
+  });
+}
+function mine(s, w){                                           // your changes to one answer, in piece order
+  var c = s.changes[w] || {}, k = s.keep[w] || {};
+  return Object.keys(c).map(Number).sort(function(a, b){ return a - b; })
+    .map(function(n){ return {n: n, text: c[n], lesson: !!k[n]}; });
 }
 function show(box, text, say){                                // the command to paste, or with kb serve the sentence to save
   box.hidden = !text;
@@ -184,10 +234,15 @@ function render(){
   all(".rate[data-worker]").forEach(function(r){
     var w = r.getAttribute("data-worker"), n = (s.ticks[w] || []).sort(function(a, b){ return a - b; }), cmd = null;
     r.querySelector(".count").textContent = L.ticked.replace("{k}", n.length).replace("{n}", r.getAttribute("data-total"));
-    if (n.length || s.none[w])
+    var ch = mine(s, w);
+    if (n.length || s.none[w] || ch.length)
       cmd = "kb picture rate " + (log ? "--runlog " + q(log) + " " : "") + D.run + " " + (n.length ? n.join(" ") : "none")
-          + (D.multi ? " --worker " + q(w) : "") + (s.why[w] ? " --why " + q(s.why[w]) : "");
-    show(r.querySelector(".cmd"), cmd, fill(L.save_rate, {list: n.length ? n.join(", ") : L.none, n: r.getAttribute("data-total"), w: w}));
+          + (D.multi ? " --worker " + q(w) : "") + (s.why[w] ? " --why " + q(s.why[w]) : "")
+          + ch.map(function(c){ return " --change " + c.n + " " + q(c.text) + (c.lesson ? " --keep " + c.n : ""); }).join("");
+    var say = fill(L.save_rate, {list: n.length ? n.map(function(x){ return "#" + x; }).join(", ") : L.none,
+                                 k: n.length, n: r.getAttribute("data-total"), w: w});
+    if (ch.length) say += " " + fill(L.save_change, {list: ch.map(function(c){ return "#" + c.n + (c.lesson ? " (" + L.a_lesson + ")" : ""); }).join(", ")});
+    show(r.querySelector(".cmd"), cmd, say);
   });
   var pk = document.querySelector(".pick .cmd");
   if (pk) show(pk, s.pick ? "kb models pick " + D.run + " " + q(s.pick) + (log ? " --db " + q(log) : "") : null,
@@ -196,12 +251,19 @@ function render(){
   document.getElementById("empty").hidden = ready > 0;
   document.getElementById("ready").textContent = "(" + ready + ")";
   document.querySelector(".jump").hidden = ready === 0;
-  all(".piece").forEach(function(p){ p.classList.toggle("on", p.querySelector(".tick input").checked); });
+  all(".piece").forEach(function(p){
+    p.classList.toggle("on", p.querySelector(".tick input").checked);
+    var t = p.querySelector("textarea.change-text");
+    if (t){
+      p.classList.toggle("edited", !!t.value.trim());
+      p.querySelector(".keep-box").disabled = !t.value.trim();     // a lesson needs your words first
+    }
+  });
   save(s);
 }
 document.addEventListener("change", function(e){
   var t = e.target;
-  if (t.matches(".piece input[type=checkbox]") && t.checked){          // a tick and "none" cannot both be true
+  if (t.matches(".piece .tick input") && t.checked){                  // a tick and "none" cannot both be true
     var r = document.querySelector('.rate[data-worker="' + CSS.escape(t.getAttribute("data-worker")) + '"]');
     if (r) r.querySelector(".none-box").checked = false;
   }
@@ -211,7 +273,7 @@ document.addEventListener("change", function(e){
   }
   render();
 });
-document.addEventListener("input", function(e){ if (e.target.matches("input.reason")) render(); });
+document.addEventListener("input", function(e){ if (e.target.matches("input.reason, textarea.change-text")) render(); });
 function send(path, body, b){                                  // kb serve only: kb on this machine records it
   var say = b.parentNode.querySelector(".say");
   b.disabled = true; b.textContent = L.saving;
@@ -219,6 +281,8 @@ function send(path, body, b){                                  // kb serve only:
     .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
     .then(function(x){
       if (!x.ok) throw new Error(x.j.error || "?");
+      var rec = b.closest("[data-rec]");
+      try { sessionStorage.setItem("kb-saved", rec ? rec.getAttribute("data-rec") : ""); } catch (e) {}
       location.reload();                                         // unsaved ticks for the others stay in this browser
     })
     .catch(function(err){
@@ -232,7 +296,7 @@ document.addEventListener("click", function(e){
     var s = state(), r = sv.closest(".rate");
     if (r){
       var w = r.getAttribute("data-worker");
-      send("/api/rate", {run: D.run, worker: w, pieces: s.ticks[w] || [], why: s.why[w] || ""}, sv);
+      send("/api/rate", {run: D.run, worker: w, pieces: s.ticks[w] || [], why: s.why[w] || "", changes: mine(s, w)}, sv);
     } else if (s.pick) send("/api/pick", {run: D.run, worker: s.pick}, sv);
     return;
   }
@@ -249,8 +313,20 @@ document.addEventListener("click", function(e){
   }
   if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
 });
+function saved(){                                              // after Save: show what kb now holds, where you are
+  var id = null;
+  try { id = sessionStorage.getItem("kb-saved"); sessionStorage.removeItem("kb-saved"); } catch (e) {}
+  var box = id && document.getElementById(id);
+  if (!box) return;
+  var p = document.createElement("p");
+  p.className = "now"; p.textContent = L.saved_now;
+  box.insertBefore(p, box.firstChild);
+  box.classList.add("just");
+  box.scrollIntoView({block: "center"});
+}
 restore();
 render();
+saved();
 })();
 </script>
 </body>

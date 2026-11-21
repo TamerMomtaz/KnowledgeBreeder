@@ -26,6 +26,7 @@
     kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
     kb picture rate RUN 1 6                     mark the pieces you would act on; the share is kb's score
     kb picture page                             your newest advice run as one page: every model in one list, tick boxes
+    kb picture trail                            who did what in that run, step by step, as a Vn-trail
 
     kb models init / list / check               which models kb may ask, and where each one lives
     kb models pick RUN NAME                     record which model's answer you chose
@@ -135,7 +136,16 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("run"); x.add_argument("pieces", nargs="+", help="the numbers of the pieces you would act on, or: none")
     x.add_argument("--worker", help="whose answer, when the run holds several")
     x.add_argument("--why", help="a short reason, kept with the rating")
-    x.add_argument("--runlog", default=runlog)
+    x.add_argument("--change", nargs=2, action="append", default=[], metavar=("N", "TEXT"),
+                   help="your own version of piece N, in your words; kept with the rating")
+    x.add_argument("--keep", type=int, action="append", default=[], metavar="N",
+                   help="also make your change to piece N a lesson for every run")
+    x.add_argument("--runlog", default=runlog); x.add_argument("--lessons", default=lfile); x.add_argument("--today")
+    x = ps.add_parser("trail", help="who did what in an advice run, step by step, as a Vn-trail")
+    x.add_argument("run", nargs="?", help="the run, default your newest advice run")
+    x.add_argument("--all", action="store_true", help="every advice run, oldest first")
+    x.add_argument("--json", action="store_true", help="one entry per line, for coding many trails")
+    x.add_argument("--lang", choices=["en", "ar"], default="en"); x.add_argument("--runlog", default=runlog)
     x = ps.add_parser("page", help="one advice run as one page: every model's pieces in one list, with tick boxes")
     x.add_argument("run", nargs="?", help="the run, default your newest advice run")
     x.add_argument("--out", help="where to write it, default work/advice/RUN.html")
@@ -324,6 +334,8 @@ def _picture(a, dump) -> int:
         return _rate(a)
     if a.pic_cmd == "page":
         return _page(a)
+    if a.pic_cmd == "trail":
+        return _trail(a)
     pic = Picture.load(a.file)
     today = date.fromisoformat(a.today) if getattr(a, "today", None) else None
     if a.pic_cmd == "advise":
@@ -456,15 +468,63 @@ def _rate(a) -> int:
     from .runlog import RunLog
     if not os.path.exists(a.runlog):
         raise KeyError(f"no run log at {a.runlog} (use --runlog PATH or set KB_RUNLOG)")
+    changes = []
+    for k, text in a.change:
+        if not k.isdigit():
+            raise KeyError(f"--change takes a piece number, then your words: --change 2 \"...\", not {k!r}.")
+        changes.append((int(k), text))
     log = RunLog(a.runlog)
-    r = rating.rate(log, a.run, rating.pieces_from_words(a.pieces), a.worker, a.why)
-    log.close()
+    try:
+        r = rating.rate(log, a.run, rating.pieces_from_words(a.pieces), a.worker, a.why, changes=changes, kept=a.keep)
+    finally:
+        log.close()
     print(f"Recorded: you would act on {len(r['act'])} of {r['n']} pieces from {r['worker']} in {r['run']} "
-          f"({round(100 * r['share'])}%). If the loop works, this share rises run by run. Watch it with:\n"
+          f"({round(100 * r['share'])}%).")
+    if r["changes"]:
+        from datetime import date
+
+        from .picture import lessons as les
+        today = date.fromisoformat(a.today) if a.today else date.today()
+        for k, text in r["changes"]:
+            line = f"Your change to #{k}: {text}"
+            if k in r["kept"]:
+                les.add(a.lessons, text, today)
+                line += f"\n  Kept as a lesson in {a.lessons}; every advice run follows it."
+            print(line)
+    print("If the loop works, the share you would act on rises run by run. Watch it with:\n"
           f"  kb log --db {a.runlog} workers --task advise --score would_act\n"
           f"or as a table at the bottom of: kb picture page\n"
           f"If a piece was wrong for a reason that will come back, teach kb once:\n"
           f"  kb picture lesson \"your rule, in your own words\"")
+    return 0
+
+
+def _trail(a) -> int:
+    import json
+
+    from .picture import page, trail
+    from .runlog import RunLog, query
+    if not os.path.exists(a.runlog):
+        raise KeyError(f"no run log at {a.runlog} (use --runlog PATH or set KB_RUNLOG)")
+    log = RunLog(a.runlog)
+    try:
+        if a.all:
+            ids = [r["id"] for r in reversed(query.runs(log, task="advise", limit=100_000))]
+        elif a.run:
+            ids = [log.get(a.run).id]
+        else:
+            ids = [r["id"] for r in query.runs(log, task="advise", limit=1)]
+        if not ids:
+            raise KeyError(f"{a.runlog} holds no advice run yet. Make one with: kb picture advise")
+        trails = [(i, trail.entries(page.gather(log, i), a.lang)) for i in ids]
+    finally:
+        log.close()
+    for run_id, t in trails:
+        if a.json:
+            for e in t:
+                print(json.dumps({"run": run_id, **e}, ensure_ascii=False))
+        else:
+            print(trail.markdown(t, run_id, a.lang))
     return 0
 
 
