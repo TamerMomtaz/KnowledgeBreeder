@@ -21,8 +21,17 @@ def pieces_from_words(words: Sequence[str]) -> list[int]:
         raise KeyError("give the numbers of the pieces you would act on, as 1 6, or the word none.") from None
 
 
-def rate(log: RunLog, run_id: str, act: Sequence[int], worker: str | None = None, why: str | None = None) -> dict:
-    """Store the share of one answer's pieces you would act on, as the score would_act."""
+MAX_CHANGE = 600        # characters in one change to an idea
+
+
+def rate(log: RunLog, run_id: str, act: Sequence[int], worker: str | None = None, why: str | None = None,
+         changes: Sequence[tuple[int, str]] = (), kept: Sequence[int] = ()) -> dict:
+    """Store the share of one answer's pieces you would act on, as the score would_act.
+
+    ``changes`` are your own versions of some of the pieces, as (piece number, your words). Each is kept on the
+    answer as a score called changed, valued at the piece's number, with your words as its note. ``kept`` names
+    the changed pieces you also made a lesson of; those get a score called lesson_from, so the trail can say so.
+    Writing the lesson itself is the caller's job, since only the caller knows where your lessons file is."""
     run = log.get(run_id)
     shown = query.show(log, run.id, payloads=True)
     if shown["task"] != "advise":
@@ -46,10 +55,28 @@ def rate(log: RunLog, run_id: str, act: Sequence[int], worker: str | None = None
     n, act = len(advice), sorted(set(act))
     if act and (act[0] < 1 or act[-1] > n):
         raise KeyError(f"{s['worker']} showed {n} pieces in {run.id}, numbered 1 to {n}.")
+    own: dict[int, str] = {}
+    for k, text in changes:
+        text = " ".join(str(text or "").split())
+        if not text:
+            continue
+        if not isinstance(k, int) or not 1 <= k <= n:
+            raise KeyError(f"a change names piece {k}, but {s['worker']} showed pieces 1 to {n} in {run.id}.")
+        if len(text) > MAX_CHANGE:
+            raise KeyError(f"your change to piece {k} is {len(text)} characters; keep it under {MAX_CHANGE}.")
+        own[k] = text
+    if set(kept) - set(own):
+        raise KeyError("a lesson can only be kept from a piece you changed.")
     why = " ".join((why or "").split())
     note = f"would act on {', '.join(map(str, act)) or 'none'} of {n}" + (f". Why: {why}" if why else "")
-    Step(run, s["id"]).score("would_act", len(act) / n, note=note)
-    return {"run": run.id, "worker": s["worker"], "act": act, "n": n, "share": len(act) / n}
+    st = Step(run, s["id"])
+    st.score("would_act", len(act) / n, note=note)
+    for k, text in sorted(own.items()):
+        st.score("changed", k, note=text)
+        if k in kept:
+            st.score("lesson_from", k, note=text)
+    return {"run": run.id, "worker": s["worker"], "act": act, "n": n, "share": len(act) / n,
+            "changes": sorted(own.items()), "kept": sorted(set(kept))}
 
 
 def pick(log: RunLog, run_id: str, name: str) -> dict:

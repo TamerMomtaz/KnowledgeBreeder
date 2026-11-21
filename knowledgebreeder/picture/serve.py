@@ -88,6 +88,21 @@ def host_ok(host: str | None, port: int) -> bool:
     return name.endswith(".ts.net") and p in ("", "443")
 
 
+def _changes(raw) -> list[tuple[int, str, bool]]:
+    """Your changes to pieces as the page sends them: [{"n": 2, "text": "...", "lesson": true}, ...]."""
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or len(raw) > 50:
+        raise KeyError("changes must be a short list.")
+    out = []
+    for c in raw:
+        if not (isinstance(c, dict) and isinstance(c.get("n"), int) and not isinstance(c.get("n"), bool)
+                and isinstance(c.get("text"), str) and isinstance(c.get("lesson", False), bool)):
+            raise KeyError("each change needs a piece number n, its text, and lesson true or false.")
+        out.append((c["n"], c["text"], c.get("lesson", False)))
+    return out
+
+
 def verdicts(log: RunLog) -> dict[str, dict]:
     """For each advice run: how many models answered, how many answers you rated, and whom you picked."""
     out: dict[str, dict] = {}
@@ -327,8 +342,12 @@ class Handler(BaseHTTPRequestHandler):
                     pieces = body.get("pieces") or []
                     if not isinstance(pieces, list) or not all(isinstance(x, int) and not isinstance(x, bool) for x in pieces):
                         raise KeyError("pieces must be a list of piece numbers.")
+                    changes = _changes(body.get("changes"))
                     r = rating.rate(log, str(body.get("run") or ""), pieces, str(body.get("worker") or "") or None,
-                                    str(body.get("why") or "") or None)
+                                    str(body.get("why") or "") or None, changes=[(k, t) for k, t, _ in changes],
+                                    kept=[k for k, _, keep in changes if keep])
+                    r["lessons_added"] = [les.add(self.kb.lessons, t, self.kb.today or date.today())[1]
+                                          for k, t in r["changes"] if k in r["kept"]].count(True)
                 else:
                     r = rating.pick(log, str(body.get("run") or ""), str(body.get("worker") or ""))
             finally:

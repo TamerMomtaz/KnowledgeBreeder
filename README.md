@@ -387,7 +387,9 @@ kb picture rate run_4f1c9a2b7d3e 1 6
 ```
 
 Add `--why "..."` to keep a reason with it, `--worker NAME` when the run asked several models, or the word `none`
-when you would act on none. The share of pieces you would act on is stored as the score `would_act`. If the lessons
+when you would act on none. When a piece is nearly right, say it your way with `--change 2 "your version"`; add
+`--keep 2` to make that change a lesson for every run too. Your words are kept with the rating, and the page shows
+them on the idea from then on. The share of pieces you would act on is stored as the score `would_act`. If the lessons
 work, it rises run by run:
 
 ```bash
@@ -421,14 +423,41 @@ one file that opens with no internet and asks the network for nothing.
   is made from the lines cited and the words used, not from meaning. The same advice from two models counts twice;
   two different answers on the same lines are worth reading side by side.
 - Each piece shows the lines it cites, so you can check it where you read it.
-- Tick what you would act on, and choose the better answer if the run asked several models. The page writes the
-  exact `kb picture rate` and `kb models pick` commands, each with a Copy button. The page itself saves nothing:
-  you paste the commands, and kb records them.
+- Tick what you would act on, and choose the better answer if the run asked several models. Under each piece,
+  "Change it" opens a box to say the idea your way, with a tick to keep it as a lesson for every run. The page
+  writes the exact `kb picture rate` and `kb models pick` commands, each with a Copy button. The page itself saves
+  nothing: you paste the commands, and kb records them. Once recorded, the page says back what kb holds: the
+  pieces, your reason and your changes, in your words.
 - At the bottom, a table shows, run by run, the share of each model's pieces you said you would act on, and whom you
   picked. That is how a model earns its place, or loses it.
+- Below it, folded away until you open it, is the run's trail (next section).
 
 `--lang ar` writes the page in Arabic. It holds lines from your cards, so it stays in `work/`, which is never
 committed.
+
+### The trail of a run
+
+Every advice run is a piece of work done by you and one or more models together. kb records each step of it in the
+run log as it happens, so it can say afterwards who did what, in the eight fields of a Vn-trail (Momtaz, 2026, "The
+Vn-Trail: A Method for Inspectable Human-AI Collaboration in Scholarly Work", SSRN 6739158): the step, what
+started it, what was added, removed and reframed, who started the move, why, and what each side brought.
+
+- V0 is your ask: the lines of your cards and the lessons sent, and to whom. HUMAN.
+- One entry per model's answer: its pieces, and any kb dropped for citing no line it sent. AI.
+- One entry per verdict you saved: what you would act on and what not, and why. HUMAN.
+- One entry per change you made to an idea, from the model's words to yours. DIALOGUE: neither side alone would
+  have written it.
+- Your pick, if the run asked several models. HUMAN.
+- While some answer still waits for your verdict, the trail ends with a "forthcoming" row. It claims to be
+  faithful, not complete.
+
+```bash
+kb picture trail
+```
+
+prints the newest run's trail as a table; name a run to see another, add `--json` for one line per step (for coding
+many trails at once), `--all` for every advice run, `--lang ar` for Arabic. On the page, the trail sits closed at the
+bottom, with a one-line count of HUMAN, AI and DIALOGUE steps; open it only when you want it.
 
 ### On your phone
 
@@ -440,8 +469,9 @@ kb serve --open
 
 `kb serve` shows every advice run as a list, newest first, with what you have recorded for each. Each run opens as
 the same page, but with a Save button where the commands were: ticks, the "none" box, your reason and your pick are
-recorded by kb as you press it, through the same rules as `kb picture rate` and `kb models pick`. You can add a
-lesson from the list page too.
+recorded by kb as you press it, through the same rules as `kb picture rate` and `kb models pick`. Your changes to
+ideas save with the ticks, and a ticked "keep it as a lesson" adds the lesson at the same press. After Save, the page
+comes back to what kb recorded, marked "Saved", with your words in it. You can add a lesson from the list page too.
 
 It listens on `127.0.0.1` only, so nothing on your network or the internet can reach it. To reach it from your phone,
 put [Tailscale](https://tailscale.com) on the laptop and on the phone, signed in to the same account, and run once:
