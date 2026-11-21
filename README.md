@@ -25,8 +25,8 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/walk/` | Walk the plant: the graph drawn as one page that opens offline. Pick an item and see what stops with it or which valves box it in. | Tested on a demo plant; not yet on a real one |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
-| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run and one page per run that puts every model's advice in one list. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run for real four times: three on a local model offline, once beside an outside model the person allowed |
-| `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. | Tested against a stand-in server only |
+| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run and one page per run that puts every model's advice in one list, served to your phone if you like. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run for real four times: three on a local model offline, once beside an outside model the person allowed |
+| `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. Ready entries for five providers. | Tested against a stand-in server only |
 | `knowledgebreeder/scout/` | The scout: reads pages you saved against your projects, keeps what the text itself shows, and keeps a ledger of everything it read and passed over. | Tested against a stand-in server only |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
 
@@ -288,6 +288,25 @@ pip install -e ".[key]"
 The example `key` entry turns on `"fallbacks": "default"`: if the model declines a request, the API lets another
 Claude model answer, and kb says which one did. Remove that line to turn it off.
 
+#### Adding an outside model
+
+kb has ready entries for five providers: `openai`, `gemini`, `kimi`, `deepseek` and `claude`. One command writes the
+entry, keeps every other entry as it was, and tells you where to get a key, which variable it goes in, and what
+the provider says it does with your data:
+
+```bash
+kb models add gemini
+```
+
+It then shows how to put the key in its variable without it showing on screen or landing in your shell history
+(`read -rs GEMINI_API_KEY && export GEMINI_API_KEY`, then paste), how to check the model answers, and how to ask it
+beside your local one. `--as NAME` gives the entry another name and `--model ID` another model at that provider.
+Model names and prices change often: `kb models check NAME --allow NAME` shows what your key can really use. These
+entries are outside models, so each run still needs `--allow NAME` (or `--allow a,b` for several).
+
+Read what each provider says about your data before you send it cards about client work. The command prints it;
+at the time of writing, DeepSeek's privacy policy says it stores data in China and may use it to train its models.
+
 A local runtime may cut a long prompt to fit its context window without saying so. kb therefore sends a local model
 a bounded amount (`"budget"`, 8,000 characters by default), tells you how many lines did not fit, and warns when the
 token count the runtime reports is far too low for what was sent. Raise `budget` in the entry when your runtime's
@@ -411,6 +430,34 @@ one file that opens with no internet and asks the network for nothing.
 `--lang ar` writes the page in Arabic. It holds lines from your cards, so it stays in `work/`, which is never
 committed.
 
+### On your phone
+
+Ideas come on the phone, so the pages can be read and rated there too, with no commands to paste:
+
+```bash
+kb serve --open
+```
+
+`kb serve` shows every advice run as a list, newest first, with what you have recorded for each. Each run opens as
+the same page, but with a Save button where the commands were: ticks, the "none" box, your reason and your pick are
+recorded by kb as you press it, through the same rules as `kb picture rate` and `kb models pick`. You can add a
+lesson from the list page too.
+
+It listens on `127.0.0.1` only, so nothing on your network or the internet can reach it. To reach it from your phone,
+put [Tailscale](https://tailscale.com) on the laptop and on the phone, signed in to the same account, and run once:
+
+```bash
+sudo tailscale serve --bg 8765
+```
+
+Tailscale prints an address ending in `.ts.net`. Open it on the phone. Only devices on your own tailnet can, and the
+connection is encrypted. `sudo tailscale serve reset` takes it off again. Never use `tailscale funnel` (or ngrok, or
+a router port) for this: that would put your cards on the internet.
+
+kb serve also refuses requests that name another host (a web page cannot reach it by renaming an address), takes
+changes only as JSON with its own header (a page from another site cannot send them), and tells the browser to keep
+nothing and load nothing from outside. When Tailscale says who opened the page, the list shows it.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:
@@ -454,6 +501,8 @@ lines that were sent, so treat `runs.db` and `work/` as private.
   (text drawn as outlines, hatching, symbols made of many strokes). It ignores curved pipes and does nothing for scans.
 - The vector reader is not yet wired into the seed's extraction step. That is the first candidate in
   `breeding/candidates.md`, and it must earn its place with a score.
+- `kb serve` serves while its terminal is open; it is not a background service. The phone reaches it only while the
+  laptop is on and awake. Its safety rests on staying on `127.0.0.1`, with Tailscale as the only way in.
 - No accuracy number is claimed for this repo yet. `breeding/scores.jsonl` will hold them as they are measured.
 
 ## Credits and licence

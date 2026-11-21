@@ -63,6 +63,9 @@ LABELS = {
         "pick_h": "Which answer is better overall?", "pick_note": "This is a separate vote from the ticks.",
         "rated": "Recorded: you would act on {list} of {n} ({p}%).", "picked_done": "Recorded: you picked {w}.",
         "copy": "Copy", "copied": "Copied",
+        "save": "Save", "saving": "Saving…", "save_rate": "You would act on {list} of {n} from {w}.",
+        "save_pick": "You pick {w}.", "not_saved": "Not saved: {e}", "back": "All runs",
+        "record_note_live": "Tick the pieces you would act on, then press Save. Each answer is saved once.",
         "history_h": "Who earns your ticks, run by run",
         "history_note": "The share of each model's pieces you said you would act on. If the loop works, it rises.",
         "history_few": "Rate a few more runs and the trend shows here.", "picked": "picked",
@@ -95,6 +98,9 @@ LABELS = {
         "pick_h": "أي إجابة أفضل إجمالاً؟", "pick_note": "هذا تصويت منفصل عن العلامات.",
         "rated": "سُجّل: ستعمل بـ {list} من {n} ({p}٪).", "picked_done": "سُجّل: اخترت {w}.",
         "copy": "نسخ", "copied": "تم النسخ",
+        "save": "حفظ", "saving": "جارٍ الحفظ…", "save_rate": "ستعمل بـ {list} من {n} من {w}.",
+        "save_pick": "اخترت {w}.", "not_saved": "لم يُحفظ: {e}", "back": "كل التشغيلات",
+        "record_note_live": "ضع علامة على النصائح التي ستعمل بها، ثم اضغط حفظ. كل إجابة تُحفظ مرة واحدة.",
         "history_h": "من يكسب علاماتك، تشغيلاً بعد تشغيل",
         "history_note": "نسبة نصائح كل نموذج التي قلت إنك ستعمل بها. إن نجحت الحلقة فهي ترتفع.",
         "history_few": "قيّم بضع تشغيلات أخرى وسيظهر الاتجاه هنا.", "picked": "مختار",
@@ -299,9 +305,13 @@ def _history(rows: list[dict], workers: list[str], hues: dict[str, int], lang: s
 
 
 def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag: str | None = None,
-          today: date | None = None) -> str:
-    """The whole page as one string. ``log_flag`` is the run log's path when the commands must name it."""
+          today: date | None = None, live: bool = False) -> str:
+    """The whole page as one string. ``log_flag`` is the run log's path when the commands must name it.
+    ``live`` is for kb serve: Save buttons send your ticks to kb on this machine instead of writing commands."""
     lang = lang if lang in LABELS else "en"
+    out_box = (f'<div class="cmd live" hidden><span class="say" dir="auto"></span>'
+               f'<button type="button" class="save">{_e(_t(lang, "save"))}</button></div>' if live else
+               f'<div class="cmd" hidden><code dir="ltr"></code><button type="button" class="copy">{_e(_t(lang, "copy"))}</button></div>')
     today = today or date.today()
     answers = data["answers"]
     workers = [a["worker"] for a in answers]
@@ -321,7 +331,7 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
         else:
             parts.append(inner)
     n_pieces = sum(len(a["pieces"]) for a in answers)
-    lessons = ('<ol class="lessons">' + "".join(f'<li dir="auto">{_e(x)}</li>' for x in data["lessons"]) + "</ol>"
+    lessons = ('<ol class="lessons">' + "".join(f'<li><bdi>{_e(x)}</bdi></li>' for x in data["lessons"]) + "</ol>"
                if data["lessons"] else f'<p class="soft">{_e(_t(lang, "no_lessons"))}</p>')
     rate = []
     for a in answers:
@@ -337,7 +347,7 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
                     f'<div class="row">{_tag(a["worker"], hue, a["model"])} <span class="count"></span></div>'
                     f'<label class="none"><input type="checkbox" class="none-box"> {_e(_t(lang, "none_from"))}</label>'
                     f'<input type="text" class="reason" placeholder="{_e(_t(lang, "why_ph"))}" aria-label="{_e(_t(lang, "why_ph"))}" dir="auto">'
-                    f'<div class="cmd" hidden><code dir="ltr"></code><button type="button" class="copy">{_e(_t(lang, "copy"))}</button></div></div>')
+                    f'{out_box}</div>')
     pick = ""
     ok = [a for a in answers if "error" not in a and a["pieces"]]
     if len(ok) > 1:
@@ -348,9 +358,8 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
             radios = "".join(f'<label class="radio"><input type="radio" name="pick" value="{_e(a["worker"])}"> '
                              f'{_tag(a["worker"], hues[a["worker"]], a["model"])}</label>' for a in ok)
             pick = (f'<div class="pick"><h3>{_e(_t(lang, "pick_h"))}</h3><p class="soft small">{_e(_t(lang, "pick_note"))}</p>'
-                    f'<div class="radios">{radios}</div><div class="cmd" hidden><code dir="ltr"></code>'
-                    f'<button type="button" class="copy">{_e(_t(lang, "copy"))}</button></div></div>')
-    blob = json.dumps({"run": data["run"], "multi": len(ok) > 1, "log": log_flag, "labels": LABELS[lang]},
+                    f'<div class="radios">{radios}</div>{out_box}</div>')
+    blob = json.dumps({"run": data["run"], "multi": len(ok) > 1, "log": log_flag, "live": live, "labels": LABELS[lang]},
                       ensure_ascii=False).replace("<", "\\u003c")
     page = resources.files(__package__).joinpath("page.html").read_text(encoding="utf-8")
     fill = {
@@ -361,13 +370,16 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
         "__WHO_H__": _e(_t(lang, "who_h")),
         "__WHO__": "".join(_who(a, lang, hues[a["worker"]]) for a in answers),
         "__LESSONS_H__": _e(_t(lang, "lessons_h")) + f" ({len(data['lessons'])})", "__RECORD_H__": _e(_t(lang, "record_h")),
-        "__RECORD_NOTE__": _e(_t(lang, "record_note")), "__HISTORY_H__": _e(_t(lang, "history_h")),
+        "__RECORD_NOTE__": _e(_t(lang, "record_note_live" if live else "record_note")), "__HISTORY_H__": _e(_t(lang, "history_h")),
         "__HISTORY_NOTE__": _e(_t(lang, "history_note")), "__EMPTY__": _e(_t(lang, "empty")),
         "__PRIVATE__": _e(_t(lang, "private")), "__MADE__": _e(_t(lang, "made", d=today.isoformat())),
     }
     fill |= {"<!--__PIECES__-->": "".join(parts), "<!--__LESSONS__-->": lessons, "<!--__RATE__-->": "".join(rate),
              "<!--__PICK__-->": pick, "<!--__HISTORY__-->": _history(hist or [], workers, hues, lang),
              "/*__DATA__*/": blob}
+    fill["<!--__BACK__-->"] = (f'<p class="back"><a href="/?lang={lang}">{_e(_t(lang, "back"))}</a></p>' if live else "")
+    if live:                                    # the Save buttons talk to kb on the machine that served the page
+        page = page.replace("default-src 'none';", "default-src 'none'; connect-src 'self';", 1)
     return re.sub(r"<!--__[A-Z]+__-->|/\*__DATA__\*/|__[A-Z_]+__", lambda m: fill.get(m.group(0), m.group(0)), page)
 
 

@@ -75,6 +75,14 @@ input.reason{width:100%;background:var(--bg);border:1px solid var(--line);border
 .copy{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 14px;min-height:40px;cursor:pointer;font-weight:600}
 @media (prefers-color-scheme: dark){.copy{color:#06121f}}
 .done{color:var(--soft)}
+.cmd.live{align-items:center;flex-wrap:wrap}
+.say{flex:1;min-width:0;font-weight:600}
+.save{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 18px;min-height:44px;cursor:pointer;font-weight:600}
+.save:disabled{opacity:.6;cursor:default}
+.err{color:var(--warn)}
+.back{margin:0 0 6px}
+.back a{color:var(--accent)}
+@media (prefers-color-scheme: dark){.save{color:#06121f}}
 .scroll{overflow-x:auto}
 .hist{border-collapse:collapse;width:100%;font-size:.9rem}
 .hist th,.hist td{padding:6px 8px;border-top:1px solid var(--line);text-align:start;white-space:nowrap}
@@ -102,6 +110,7 @@ footer{color:var(--soft);font-size:.86rem;margin-top:24px}
 <body>
 <div class="wrap">
 <header>
+  <!--__BACK__-->
   <h1>__TITLE__</h1>
   <p>__SUB__</p>
   <p class="sign">__SIGN__</p>
@@ -163,10 +172,13 @@ function restore(){
   });
   if (s.pick) all("input[name=pick]").forEach(function(p){ if (p.value === s.pick) p.checked = true; });
 }
-function show(box, text){
+function show(box, text, say){                                // the command to paste, or with kb serve the sentence to save
   box.hidden = !text;
-  box.querySelector("code").textContent = text || "";
+  var c = box.querySelector(D.live ? ".say" : "code");
+  c.textContent = D.live ? (say || "") : (text || "");
+  if (D.live) c.classList.remove("err");
 }
+function fill(s, v){ for (var k in v) s = s.replace("{" + k + "}", v[k]); return s; }
 function render(){
   var s = state(), log = D.log;
   all(".rate[data-worker]").forEach(function(r){
@@ -175,10 +187,11 @@ function render(){
     if (n.length || s.none[w])
       cmd = "kb picture rate " + (log ? "--runlog " + q(log) + " " : "") + D.run + " " + (n.length ? n.join(" ") : "none")
           + (D.multi ? " --worker " + q(w) : "") + (s.why[w] ? " --why " + q(s.why[w]) : "");
-    show(r.querySelector(".cmd"), cmd);
+    show(r.querySelector(".cmd"), cmd, fill(L.save_rate, {list: n.length ? n.join(", ") : L.none, n: r.getAttribute("data-total"), w: w}));
   });
   var pk = document.querySelector(".pick .cmd");
-  if (pk) show(pk, s.pick ? "kb models pick " + D.run + " " + q(s.pick) + (log ? " --db " + q(log) : "") : null);
+  if (pk) show(pk, s.pick ? "kb models pick " + D.run + " " + q(s.pick) + (log ? " --db " + q(log) : "") : null,
+               s.pick ? fill(L.save_pick, {w: s.pick}) : "");
   var ready = all(".cmd").filter(function(c){ return !c.hidden; }).length;
   document.getElementById("empty").hidden = ready > 0;
   document.getElementById("ready").textContent = "(" + ready + ")";
@@ -199,7 +212,30 @@ document.addEventListener("change", function(e){
   render();
 });
 document.addEventListener("input", function(e){ if (e.target.matches("input.reason")) render(); });
+function send(path, body, b){                                  // kb serve only: kb on this machine records it
+  var say = b.parentNode.querySelector(".say");
+  b.disabled = true; b.textContent = L.saving;
+  fetch(path, {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify(body)})
+    .then(function(r){ return r.json().then(function(j){ return {ok: r.ok, j: j}; }); })
+    .then(function(x){
+      if (!x.ok) throw new Error(x.j.error || "?");
+      location.reload();                                         // unsaved ticks for the others stay in this browser
+    })
+    .catch(function(err){
+      b.disabled = false; b.textContent = L.save;
+      say.textContent = fill(L.not_saved, {e: err.message}); say.classList.add("err");
+    });
+}
 document.addEventListener("click", function(e){
+  var sv = e.target.closest ? e.target.closest(".save") : null;
+  if (sv){
+    var s = state(), r = sv.closest(".rate");
+    if (r){
+      var w = r.getAttribute("data-worker");
+      send("/api/rate", {run: D.run, worker: w, pieces: s.ticks[w] || [], why: s.why[w] || ""}, sv);
+    } else if (s.pick) send("/api/pick", {run: D.run, worker: s.pick}, sv);
+    return;
+  }
   var b = e.target.closest ? e.target.closest(".copy") : null;
   if (!b) return;
   var text = b.parentNode.querySelector("code").textContent;

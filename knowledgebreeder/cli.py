@@ -29,6 +29,8 @@
 
     kb models init / list / check               which models kb may ask, and where each one lives
     kb models pick RUN NAME                     record which model's answer you chose
+    kb models add gemini                        add a provider kb knows (openai, gemini, kimi, deepseek, claude)
+    kb serve                                    your advice runs as pages on this machine, ticks saved as you go
     kb scout read work/sources                  read saved pages against your projects, look for chances
     kb scout log                                everything the scout read, with what it passed over and why
 
@@ -148,6 +150,17 @@ def main(argv: list[str] | None = None) -> int:
     x = ms.add_parser("check"); x.add_argument("name", nargs="?")
     x.add_argument("--allow", action="append", default=[], metavar="NAME")
     x = ms.add_parser("pick"); x.add_argument("run"); x.add_argument("name"); x.add_argument("--db", default=runlog)
+    x = ms.add_parser("add", help="add a provider kb knows, ready to use with --allow")
+    x.add_argument("provider", help="openai, gemini, kimi, deepseek or claude")
+    x.add_argument("--as", dest="as_name", help="the name to give the entry, default the provider's")
+    x.add_argument("--model", help="a different model id at that provider")
+    x.add_argument("--force", action="store_true", help="write the entry again if it is there")
+    sv = sub.add_parser("serve", help="your advice runs as pages, served on this machine only")
+    sv.add_argument("--port", type=int, default=8765)
+    sv.add_argument("--runlog", default=runlog)
+    sv.add_argument("--lessons", default=os.environ.get("KB_LESSONS", "work/lessons.md"))
+    sv.add_argument("--lang", choices=["en", "ar"], default="en")
+    sv.add_argument("--open", action="store_true", help="open it in your browser")
     so = sub.add_parser("scout", help="read saved sources against your picture")
     so.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
     so.add_argument("--ledger", default=os.environ.get("KB_SCOUT", "work/scout.jsonl"))
@@ -156,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--model"); x.add_argument("--again", action="store_true", help="ask again about sources read before")
     x = ss.add_parser("log"); x.add_argument("--today"); x.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
+    if getattr(a, "allow", None):
+        a.allow = [n.strip() for v in a.allow for n in v.split(",") if n.strip()]     # --allow a,b works too
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
@@ -195,10 +210,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
-    if a.cmd in ("picture", "models", "scout"):
+    if a.cmd in ("picture", "models", "scout", "serve"):
         from .models import ModelError, Refused
         try:
-            return {"picture": _picture, "models": _models, "scout": _scout}[a.cmd](a, dump)
+            return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
@@ -437,45 +452,15 @@ def _lesson(a) -> int:
 
 
 def _rate(a) -> int:
-    from .runlog import RunLog, Step, query
+    from .picture import rating
+    from .runlog import RunLog
     if not os.path.exists(a.runlog):
         raise KeyError(f"no run log at {a.runlog} (use --runlog PATH or set KB_RUNLOG)")
     log = RunLog(a.runlog)
-    run = log.get(a.run)
-    shown = query.show(log, run.id, payloads=True)
-    if shown["task"] != "advise":
-        raise KeyError(f"{run.id} is a {shown['task']} run, not advice.")
-    steps = [s for s in shown["steps"] if s["name"] == "advise" and s["status"] == "ok" and s["worker"]]
-    names = [s["worker"] for s in steps]
-    if a.worker:
-        steps = [s for s in steps if s["worker"] == a.worker]
-    if not names:
-        raise KeyError(f"nobody answered in {run.id}, so there is nothing to rate.")
-    if a.worker and not steps:
-        raise KeyError(f"'{a.worker}' gave no answer in {run.id}. Those that did: {', '.join(names)}.")
-    if len(steps) > 1:
-        raise KeyError(f"{run.id} holds several answers. Say whose with --worker NAME: {', '.join(names)}.")
-    s = steps[0]
-    advice = s["output"].get("advice") if isinstance(s["output"], dict) else None
-    if not advice:
-        raise KeyError(f"{s['worker']} showed no advice in {run.id}, so there is nothing to rate.")
-    if "would_act" in s["scores"]:
-        raise KeyError(f"a rating is already recorded for {s['worker']} in {run.id}.")
-    n = len(advice)
-    if [p.lower() for p in a.pieces] == ["none"]:
-        act = []
-    else:
-        try:
-            act = sorted({int(p.strip(",")) for p in a.pieces})
-        except ValueError:
-            raise KeyError("give the numbers of the pieces you would act on, as 1 6, or the word none.") from None
-        if act[0] < 1 or act[-1] > n:
-            raise KeyError(f"{s['worker']} showed {n} pieces in {run.id}, numbered 1 to {n}.")
-    note = f"would act on {', '.join(map(str, act)) or 'none'} of {n}" + (f". Why: {a.why}" if a.why else "")
-    Step(run, s["id"]).score("would_act", len(act) / n, note=note)
+    r = rating.rate(log, a.run, rating.pieces_from_words(a.pieces), a.worker, a.why)
     log.close()
-    print(f"Recorded: you would act on {len(act)} of {n} pieces from {s['worker']} in {run.id} "
-          f"({round(100 * len(act) / n)}%). If the loop works, this share rises run by run. Watch it with:\n"
+    print(f"Recorded: you would act on {len(r['act'])} of {r['n']} pieces from {r['worker']} in {r['run']} "
+          f"({round(100 * r['share'])}%). If the loop works, this share rises run by run. Watch it with:\n"
           f"  kb log --db {a.runlog} workers --task advise --score would_act\n"
           f"or as a table at the bottom of: kb picture page\n"
           f"If a piece was wrong for a reason that will come back, teach kb once:\n"
@@ -518,6 +503,41 @@ def _page(a) -> int:
     return 0
 
 
+def _serve(a, dump) -> int:
+    import shutil
+
+    from .picture import serve
+    kb = serve.Kb(a.runlog, a.lessons, a.port, a.lang)
+    try:
+        srv = serve.make(kb)
+    except OSError as e:
+        raise KeyError(f"port {a.port} is taken ({e.strerror}). Is kb serve already running? "
+                       f"Or choose another: kb serve --port {a.port + 1}") from None
+    url = f"http://127.0.0.1:{kb.port}/"
+    print(f"kb serve: {url}\nOnly this laptop can open that address. Stop with Ctrl+C.\n")
+    if not os.path.exists(a.runlog):
+        print(f"Note: no run log at {a.runlog} yet, so the list is empty. Make a run with: kb picture advise\n")
+    if shutil.which("tailscale"):
+        print("To open it on your phone, run this once in another terminal (it keeps going after a restart):\n"
+              f"  sudo tailscale serve --bg {kb.port}\n"
+              "It prints the address to open on the phone, ending in .ts.net. Only your own devices can open it.\n"
+              "To take it off your tailnet again:\n  sudo tailscale serve reset\n"
+              "Never use tailscale funnel for this: that would put your cards on the internet.\n")
+    else:
+        print("To open it on your phone: install Tailscale on this laptop and on the phone, signed in to the same\n"
+              "account, then run kb serve again for the next step.\n")
+    if a.open:
+        import webbrowser
+        webbrowser.open(url)
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        srv.server_close()
+    return 0
+
+
 def _models(a, dump) -> int:
     from . import models
     from .models import config
@@ -543,6 +563,20 @@ def _models(a, dump) -> int:
         if note:
             print(note)
         print("It holds no key and never should. The \"key\" entry is used only when a run says --allow key.")
+        return 0
+    if a.mod_cmd == "add":
+        m, preset = config.add_preset(a.file, a.provider, a.as_name, a.model, a.force)
+        host, where = models.place(m.url)
+        print(f"Added '{m.name}' to {a.file}: {m.model} at {host} ({where}).\n{preset['data']}\n\n"
+              f"1. Get a key at {preset['key_page']}\n"
+              f"2. Put it in its own variable. Run this, then paste the key and press Enter. Nothing shows while\n"
+              f"   you paste, on purpose: the key stays off the screen and out of your shell history.\n"
+              f"   read -rs {m.key_env} && export {m.key_env}\n"
+              f"   It lasts until this terminal closes. Never paste a key into a file in this folder, or into a chat.\n"
+              f"3. Check that it answers (this sends only a test question):\n"
+              f"   kb models check {m.name} --allow {m.name}\n"
+              f"4. Ask it beside your other models, for example:\n"
+              f"   kb picture advise --models local,{m.name} --allow {m.name}")
         return 0
     book = models.load(a.file)
     if a.mod_cmd == "list":
@@ -579,20 +613,14 @@ def _models(a, dump) -> int:
         dump(out)
         return 1 if bad else 0
     if a.mod_cmd == "pick":
-        from .runlog import RunLog, Step, query
+        from .picture import rating
+        from .runlog import RunLog
         if not os.path.exists(a.db):
             raise KeyError(f"no run log at {a.db} (use --db PATH or set KB_RUNLOG)")
         log = RunLog(a.db)
-        run = log.get(a.run)
-        steps = [s for s in query.show(log, run.id)["steps"] if s["worker"] and s["status"] == "ok"]
-        names = [s["worker"] for s in steps]
-        if a.name not in names:
-            raise KeyError(f"'{a.name}' gave no answer in {run.id}. Those that did: {', '.join(names) or 'none'}.")
-        if any("picked" in s["scores"] for s in steps):
-            raise KeyError(f"a pick is already recorded for {run.id}.")
-        for s in steps:
-            Step(run, s["id"]).score("picked", 1.0 if s["worker"] == a.name else 0.0, note="chosen by a person")
-        print(f"Recorded: {a.name} was picked over {', '.join(n for n in names if n != a.name) or 'no other'} in {run.id}. "
+        r = rating.pick(log, a.run, a.name)
+        log.close()
+        print(f"Recorded: {a.name} was picked over {', '.join(r['over']) or 'no other'} in {r['run']}. "
               f"See the standing with: kb log --db {a.db} workers --score picked")
         return 0
     return 0
