@@ -25,6 +25,7 @@
     kb picture advise                           advice written by a model, held to your own cards and your lessons
     kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
     kb picture rate RUN 1 6                     mark the pieces you would act on; the share is kb's score
+    kb picture page                             your newest advice run as one page: every model in one list, tick boxes
 
     kb models init / list / check               which models kb may ask, and where each one lives
     kb models pick RUN NAME                     record which model's answer you chose
@@ -133,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--worker", help="whose answer, when the run holds several")
     x.add_argument("--why", help="a short reason, kept with the rating")
     x.add_argument("--runlog", default=runlog)
+    x = ps.add_parser("page", help="one advice run as one page: every model's pieces in one list, with tick boxes")
+    x.add_argument("run", nargs="?", help="the run, default your newest advice run")
+    x.add_argument("--out", help="where to write it, default work/advice/RUN.html")
+    x.add_argument("--lang", choices=["en", "ar"], default="en"); x.add_argument("--today")
+    x.add_argument("--runlog", default=runlog)
+    x.add_argument("--open", action="store_true", help="open it in your browser")
     md = sub.add_parser("models", help="the models kb may ask, and the gate")
     md.add_argument("--file", default=mfile)
     ms = md.add_subparsers(dest="mod_cmd", required=True)
@@ -300,6 +307,8 @@ def _picture(a, dump) -> int:
         return _lesson(a)
     if a.pic_cmd == "rate":
         return _rate(a)
+    if a.pic_cmd == "page":
+        return _page(a)
     pic = Picture.load(a.file)
     today = date.fromisoformat(a.today) if getattr(a, "today", None) else None
     if a.pic_cmd == "advise":
@@ -393,14 +402,19 @@ def _advise(a, dump, pic, today) -> int:
         for r in results:
             print(f"# Advice\n\n{r['worker']} ({r['model']}) gave nothing: {r['error']}" if "error" in r else adv.advice_md(r))
             print()
-        if run and len(plans) > 1:
-            print(f"Recorded as {run.id} in {a.runlog}. When you have chosen the one you would act on:\n"
-                  f"  kb models pick {run.id} NAME\n"
-                  f"and mark its pieces you would act on:\n"
-                  f"  kb picture rate {run.id} 1 2 --worker NAME")
-        elif run:
-            print(f"Recorded as {run.id} in {a.runlog}. Mark the pieces you would act on, for example:\n"
-                  f"  kb picture rate {run.id} 1 2")
+        if run:
+            flag = "" if os.path.abspath(a.runlog) == os.path.abspath(os.environ.get("KB_RUNLOG", "runs.db")) \
+                else f" --runlog {a.runlog}"
+            names = [r["worker"] for r in results if r.get("advice")]
+            print(f"Recorded as {run.id} in {a.runlog}. See it as one page, tick what you would act on, and the page "
+                  f"writes the commands for you:\n  kb picture page{flag} --open")
+            if names:
+                print("Or rate it here: paste a line, type the numbers of the pieces you would act on at its end "
+                      "(or the word none), and press Enter.")
+                for w in names:
+                    print(f"  kb picture rate{flag} {run.id}" + (f" --worker {w}" if len(plans) > 1 else ""))
+            if len(names) > 1:
+                print(f"Choose the better answer with: kb models pick {run.id} followed by {' or '.join(names)}.")
     return 2 if failed == len(plans) else 0
 
 
@@ -463,8 +477,44 @@ def _rate(a) -> int:
     print(f"Recorded: you would act on {len(act)} of {n} pieces from {s['worker']} in {run.id} "
           f"({round(100 * len(act) / n)}%). If the loop works, this share rises run by run. Watch it with:\n"
           f"  kb log --db {a.runlog} workers --task advise --score would_act\n"
+          f"or as a table at the bottom of: kb picture page\n"
           f"If a piece was wrong for a reason that will come back, teach kb once:\n"
           f"  kb picture lesson \"your rule, in your own words\"")
+    return 0
+
+
+def _page(a) -> int:
+    from datetime import date
+    from pathlib import Path
+
+    from .picture import page
+    from .runlog import RunLog, query
+    if not os.path.exists(a.runlog):
+        raise KeyError(f"no run log at {a.runlog} (use --runlog PATH or set KB_RUNLOG)")
+    log = RunLog(a.runlog)
+    if a.run:
+        run_id = log.get(a.run).id
+    else:
+        newest = query.runs(log, task="advise", limit=1)
+        if not newest:
+            raise KeyError(f"{a.runlog} holds no advice run yet. Make one with: kb picture advise")
+        run_id = newest[0]["id"]
+    data = page.gather(log, run_id)
+    hist = page.history(log)
+    log.close()
+    same = os.path.abspath(a.runlog) == os.path.abspath(os.environ.get("KB_RUNLOG", "runs.db"))
+    today = date.fromisoformat(a.today) if a.today else None
+    out = page.write(a.out or Path("work") / "advice" / f"{run_id}.html",
+                     page.build(data, hist, lang=a.lang, log_flag=None if same else a.runlog, today=today))
+    n = sum(len(x["pieces"]) for x in data["answers"])
+    joined = sum(len(g) > 1 for g in page.group(data["answers"]))
+    who = ", ".join(x["worker"] for x in data["answers"]) or "nobody"
+    print(f"{out}: {n} pieces from {who}" + (f"; {joined} idea{'s' if joined != 1 else ''} came from more than one model"
+                                             if joined else "") + ".\nIt is private: it holds lines from your cards."
+          + ("" if a.open else f" Open it in a browser:\n  xdg-open {out}"))
+    if a.open:
+        import webbrowser
+        webbrowser.open(Path(out).resolve().as_uri())
     return 0
 
 

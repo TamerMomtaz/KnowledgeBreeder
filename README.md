@@ -25,7 +25,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/walk/` | Walk the plant: the graph drawn as one page that opens offline. Pick an item and see what stops with it or which valves box it in. | Tested on a demo plant; not yet on a real one |
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
-| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run once for real on a local model offline |
+| `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run and one page per run that puts every model's advice in one list. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run for real four times: three on a local model offline, once beside an outside model the person allowed |
 | `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. | Tested against a stand-in server only |
 | `knowledgebreeder/scout/` | The scout: reads pages you saved against your projects, keeps what the text itself shows, and keeps a ledger of everything it read and passed over. | Tested against a stand-in server only |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
@@ -360,10 +360,11 @@ If there are more than about 4,000 characters of lessons, the newest are sent an
 left out. A lesson goes wherever the advice goes: to a model off this machine only with `--allow NAME`, and the
 refusal counts your lessons in what would have been sent.
 
-After a run, mark the pieces you would act on, by their numbers:
+After a run, mark the pieces you would act on. The easiest way is the page (next section), which writes the command
+for you. In the terminal, give the run id kb printed (a unique start of it is enough) and the numbers of the pieces:
 
 ```bash
-kb picture rate RUN 1 6
+kb picture rate run_4f1c9a2b7d3e 1 6
 ```
 
 Add `--why "..."` to keep a reason with it, `--worker NAME` when the run asked several models, or the word `none`
@@ -383,6 +384,32 @@ kb picture advise --no-lessons
 kb cannot check that a model followed a lesson. Your rating is that check. Each run records the lessons it was given,
 so a lesson that does not raise the share can be found and rewritten. Nothing here retrains a model: the lessons are
 read again on every run, and you can see and change every word.
+
+### One page for every answer
+
+The terminal is the engine. To read a run, open it as one page:
+
+```bash
+kb picture page --open
+```
+
+It takes your newest advice run, or the one you name (`kb picture page RUN`), and writes `work/advice/RUN.html`:
+one file that opens with no internet and asks the network for nothing.
+
+- Every model's pieces are in one list. Each piece keeps its model's name and its own number, so a rating still
+  credits the right model.
+- Pieces from different models that cite the same lines of your cards are put together and shown first. The match
+  is made from the lines cited and the words used, not from meaning. The same advice from two models counts twice;
+  two different answers on the same lines are worth reading side by side.
+- Each piece shows the lines it cites, so you can check it where you read it.
+- Tick what you would act on, and choose the better answer if the run asked several models. The page writes the
+  exact `kb picture rate` and `kb models pick` commands, each with a Copy button. The page itself saves nothing:
+  you paste the commands, and kb records them.
+- At the bottom, a table shows, run by run, the share of each model's pieces you said you would act on, and whom you
+  picked. That is how a model earns its place, or loses it.
+
+`--lang ar` writes the page in Arabic. It holds lines from your cards, so it stays in `work/`, which is never
+committed.
 
 ### The scout
 
@@ -407,8 +434,8 @@ kb scout log
 It lists the chances still open today, and every source the scout passed over with the reason it gave. If a real
 chance sits under "Passed over", the scout missed it, and now you know.
 
-Limits: advice has run against one real model so far, a 27-billion-parameter model on a laptop, offline (November
-2026). The scout has not run against a real model yet. The tests use a stand-in server that returns canned answers,
+Limits: advice has run against two real models so far (November 2026): a 27-billion-parameter model on a laptop,
+offline, and once an outside model, allowed for that run. The scout has not run against a real model yet. The tests use a stand-in server that returns canned answers,
 so they prove what kb does with an answer, good or bad, and say nothing about how good a real model's advice is. The checks catch a citation to a line that was never sent, a quote that
 is not in the source, and a figure or deadline that is not there. They do not catch advice that cites real lines and
 is still wrong, so a person reads it and signs. The scout reads what you save. It does not search the web, and no

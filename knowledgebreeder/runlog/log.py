@@ -77,9 +77,13 @@ class RunLog:
 
     def get(self, run_id: str) -> "Run":
         """Reattach to a run, so separate processes can add steps to it. A unique prefix of the id is enough."""
-        rows = self.db.execute("SELECT id FROM runs WHERE id = ? OR id LIKE ?", (run_id, run_id + "%")).fetchall()
-        if len(rows) != 1:
-            raise KeyError(f"no single run matches '{run_id}' ({len(rows)} found)")
+        rows = self.db.execute("SELECT id FROM runs WHERE id = ? OR (? <> '' AND substr(id, 1, ?) = ?)",
+                               (run_id, run_id, len(run_id), run_id)).fetchall()     # a prefix, matched case and all
+        if not rows:
+            raise KeyError(f"no run is called '{run_id}'. A run id looks like run_4f1c9a2b7d3e. "
+                           f"See yours with: kb log --db {self.path} runs")
+        if len(rows) > 1:
+            raise KeyError(f"'{run_id}' is the start of {len(rows)} runs. Give more of the id.")
         return Run(self, rows[0]["id"])
 
     @contextmanager
