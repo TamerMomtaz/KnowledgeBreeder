@@ -160,6 +160,7 @@ def _rows(pic: Picture, today: date | None, project: str | None) -> list[tuple[s
             v = c["purpose"].get(k, "")
             if v and not v.lower().startswith("unknown"):
                 rows.append((f"{c['name']}. {label}: {v}", f"{c['name']} · PURPOSE", (project,)))
+        rows += _left(pic, project)
         rows += _details(pic, only=project)
         near = [f for f in finds if project in f[2] and (len(f[2]) > 1 or f[1].startswith("rule report"))]
         rows += near
@@ -168,8 +169,15 @@ def _rows(pic: Picture, today: date | None, project: str | None) -> list[tuple[s
     else:
         rows += [(_card_line(c), f"{c['name']} · header", (cid,)) for cid, c in pic.cards.items()]
         told = frozenset((r["ids"][0], r["part"]) for r in reports.reuse(pic)["named"])
-        rows += finds + _details(pic, told=told)
+        rows += finds + _left(pic) + _details(pic, told=told)
     return rows
+
+
+def _left(pic: Picture, only: str | None = None) -> list[tuple[str, str, tuple[str, ...]]]:
+    """What was on a card once and is not now: a chance that may have been missed, or work that was done."""
+    from .changes import left_all
+    return [(f"{x['name']} no longer lists this {x['what']}: {x['text']} (on the card until {x['last_seen']})",
+             f"{x['name']} · older version", (x["id"],)) for x in left_all(pic) if not only or x["id"] == only]
 
 
 def _number(rows: list[tuple[str, str, tuple[str, ...]]], budget: int) -> tuple[list[Line], int]:

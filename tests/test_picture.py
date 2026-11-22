@@ -122,8 +122,9 @@ def test_save_load_and_replace(tmp_path, pic):
     again = Picture.load(path)
     assert again.cards == pic.cards and reports.overlaps(again) == reports.overlaps(pic)
     newer = cards.parse("PROJECT CARD\nname: Oud practice log\narea: Music\nlast_activity: 2026-11-19\n")
-    assert again.add(newer) == {"added": [], "updated": ["Oud practice log"]}
+    assert again.add(newer) == {"added": [], "updated": ["Oud practice log"], "unchanged": []}
     assert again.cards["oud-practice-log"]["last_date"] == "2026-11-19" and len(again.cards) == 5
+    assert again.history["oud-practice-log"] == [pic.cards["oud-practice-log"]]     # the older one is kept
     with pytest.raises(KeyError):
         Picture.load(tmp_path / "missing.json")
 
@@ -166,7 +167,8 @@ def test_command_line(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out["cards"] == 5 and len(out["added"]) == 5 and out["areas_added"] == ["Painting"]
     assert main(["picture", "--file", file, "add", str(FIX)]) == 0
-    assert len(json.loads(capsys.readouterr().out)["updated"]) == 5                  # adding again replaces, never doubles
+    again = json.loads(capsys.readouterr().out)
+    assert len(again["unchanged"]) == 5 and not again["updated"]                    # the same file again changes nothing
     assert main(["picture", "--file", file, "show"]) == 0
     assert json.loads(capsys.readouterr().out)["areas"] == {"Bakery": 2, "Teaching": 2, "Music": 1, "Painting": 0}
     assert main(["picture", "--file", file, "gaps", "--json", "--today", "2026-11-20"]) == 0
