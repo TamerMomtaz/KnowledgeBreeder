@@ -307,6 +307,37 @@ entries are outside models, so each run still needs `--allow NAME` (or `--allow 
 Read what each provider says about your data before you send it cards about client work. The command prints it;
 at the time of writing, DeepSeek's privacy policy says it stores data in China and may use it to train its models.
 
+#### What never leaves this machine
+
+Allowing an outside model for a run does not send it everything. A model on this machine sees every line. A model
+anywhere else, on your network or outside, never gets a line from your cards, or a lesson, that holds:
+
+- a phone number, an email address, a network address, or something that looks like a key or a token
+- an amount of money: a number with a currency (`$`, `EGP`, `جنيه` and others)
+- a name or word on your private list, `work/private.md` (or `--private PATH`, or the `KB_PRIVATE` variable)
+- the mark `#private` (or `#خاص`) anywhere on the line
+
+Put a name on the list with:
+
+```bash
+kb picture private "Corner kiosk"
+```
+
+and see the list with `kb picture private`. Put `#private` in a card's name or first line and the whole card stays
+home, report lines that name it included. kb drops such a line before it numbers the evidence, so the model never
+learns it was there. The gate's message, `--show-prompt`, the answer, the page and the run log all say how many lines
+stayed home and of which kind, never what they said. The scout does the same with your project list. If every line
+would stay home, nothing is sent and kb says so.
+
+This is pattern matching. It will miss some private things (a client's name you did not list) and hold back some
+harmless ones (`5 pounds of flour`). The list and the mark are how you correct it, and a model on this machine is how
+you use everything.
+
+Text that someone else wrote can carry orders aimed at a model: "ignore your rules and ...". Every prompt says the
+evidence is data. kb also marks each line that reads like such an order where the model reads it, drops a piece of
+advice that rests only on marked lines, and does not take a scout quote that comes from one. That is a guard, not a
+proof: a model can still be swayed, which is why you read and sign.
+
 A local runtime may cut a long prompt to fit its context window without saying so. kb therefore sends a local model
 a bounded amount (`"budget"`, 8,000 characters by default), tells you how many lines did not fit, and warns when the
 token count the runtime reports is far too low for what was sent. Raise `budget` in the entry when your runtime's

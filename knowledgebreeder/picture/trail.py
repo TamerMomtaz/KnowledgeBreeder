@@ -30,10 +30,12 @@ T = {
         "none": "none",
         "ask_n": "V0: the ask", "ask_trigger": "you ran kb picture advise",
         "ask_plus": "{lines} lines from your cards and {lessons} of your lessons, sent to {models}",
-        "ask_minus": "{n} lines left out: they did not fit", "ask_why": "advice on: {subject}",
+        "ask_minus": "{n} lines left out: they did not fit", "ask_held": "{n} lines kept on this machine: private",
+        "ask_why": "advice on: {subject}",
         "ask_split": "carbon: the cards, the lessons and the ask. silicon: nothing yet.",
         "ans_n": "V{i}: {w}'s answer", "ans_trigger": "kb asked {w} ({model}, {where})",
         "ans_plus": "{k} pieces: {list}", "ans_minus": "{d} pieces dropped by kb's checks: they cited no line kb sent",
+        "ans_orders": "{d} pieces dropped: they rested only on lines that read like instructions to a model",
         "ans_why": "advice held to the cited lines of your cards", "ans_failed": "no answer: {e}",
         "ans_split": "silicon: {w} wrote {k} pieces. carbon: none in this step.",
         "ver_n": "V{i}: your verdict on {w}", "ver_trigger": "you read the pieces",
@@ -55,10 +57,12 @@ T = {
         "none": "لا شيء",
         "ask_n": "V0: الطلب", "ask_trigger": "شغّلت kb picture advise",
         "ask_plus": "أسطر من بطاقاتك: {lines}، ومن دروسك: {lessons}، أُرسلت إلى {models}",
-        "ask_minus": "أسطر لم تتسع: {n}", "ask_why": "نصيحة في: {subject}",
+        "ask_minus": "أسطر لم تتسع: {n}", "ask_held": "أسطر بقيت على هذا الجهاز لأنها خاصة: {n}",
+        "ask_why": "نصيحة في: {subject}",
         "ask_split": "كربون: البطاقات والدروس والطلب. سيليكون: لا شيء بعد.",
         "ans_n": "V{i}: إجابة {w}", "ans_trigger": "سأل kb النموذج {w} ({model}، {where})",
         "ans_plus": "عدد النصائح: {k}: {list}", "ans_minus": "نصائح أسقطتها فحوص kb لأنها لم تستند إلى سطر أرسله: {d}",
+        "ans_orders": "نصائح أُسقطت لأنها استندت فقط إلى أسطر تشبه أوامر لنموذج: {d}",
         "ans_why": "نصيحة مقيدة بالأسطر المذكورة من بطاقاتك", "ans_failed": "لا إجابة: {e}",
         "ans_split": "سيليكون: كتب {w} نصائح عددها {k}. كربون: لا شيء في هذه الخطوة.",
         "ver_n": "V{i}: حكمك على {w}", "ver_trigger": "قرأت النصائح",
@@ -105,10 +109,12 @@ def entries(data: dict, lang: str = "en") -> list[dict]:
                                  split), strict=True))
 
     first = next((a for a in answers if "error" not in a), answers[0] if answers else {})
+    held = max((a.get("held") or 0 for a in answers), default=0)
     out = [entry(_t(lang, "ask_n"), _t(lang, "ask_trigger"),
                  _t(lang, "ask_plus", lines=first.get("lines_sent", 0), lessons=len(data["lessons"]),
                     models=", ".join(a["worker"] for a in answers) or none),
-                 _t(lang, "ask_minus", n=first["left_out"]) if first.get("left_out") else "", "", "HUMAN",
+                 "; ".join(x for x in (_t(lang, "ask_minus", n=first["left_out"]) if first.get("left_out") else "",
+                                       _t(lang, "ask_held", n=held) if held else "") if x), "", "HUMAN",
                  _t(lang, "ask_why", subject=data.get("subject") or _t(lang, "whole")), _t(lang, "ask_split"))]
     i = 0
     for a in answers:
@@ -122,7 +128,9 @@ def entries(data: dict, lang: str = "en") -> list[dict]:
         k = len(a["pieces"])
         out.append(entry(_t(lang, "ans_n", i=i, w=a["worker"]), trig,
                          _t(lang, "ans_plus", k=k, list="; ".join(f'#{p["n"]} {_short(p.get("move"))}' for p in a["pieces"])),
-                         _t(lang, "ans_minus", d=a["dropped"]) if a.get("dropped") else "", "", "AI",
+                         "; ".join(x for x in (_t(lang, "ans_minus", d=a["dropped"]) if a.get("dropped") else "",
+                                               _t(lang, "ans_orders", d=a["dropped_orders"])
+                                               if a.get("dropped_orders") else "") if x), "", "AI",
                          _t(lang, "ans_why"), _t(lang, "ans_split", w=a["worker"], k=k)))
     waiting = []
     for a in answers:
