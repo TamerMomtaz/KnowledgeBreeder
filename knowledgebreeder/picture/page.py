@@ -50,6 +50,7 @@ LABELS = {
                      "If they differ, read both.",
         "act": "I would act on this", "why": "Why", "first_step": "First step", "from": "From",
         "lines": "The lines it cites", "check": "Check: {f} is in none of the lines it cites.",
+        "weak": "It rests only on weak cards: see kb picture check.",
         "kind_do": "do", "kind_stop": "stop", "kind_join": "join", "kind_decide": "decide", "kind_ask": "ask",
         "who_h": "Who answered", "read": "read {n} lines", "left_out": "{n} more did not fit",
         "held": "{n} kept on this machine: private", "orders": "{n} rested only on lines that read like instructions",
@@ -98,6 +99,7 @@ LABELS = {
                      "وإن اختلفت فاقرأ الاثنتين.",
         "act": "سأعمل بهذه", "why": "لماذا", "first_step": "الخطوة الأولى", "from": "المصدر",
         "lines": "الأسطر التي تستند إليها", "check": "تحقق: {f} غير موجود في أي من الأسطر التي تستند إليها.",
+        "weak": "تستند فقط إلى بطاقات ضعيفة: انظر kb picture check.",
         "kind_do": "افعل", "kind_stop": "توقف", "kind_join": "اربط", "kind_decide": "قرر", "kind_ask": "اسأل",
         "who_h": "من أجاب", "read": "الأسطر المقروءة: {n}", "left_out": "لم يتسع: {n}",
         "held": "بقيت على هذا الجهاز لأنها خاصة: {n}", "orders": "استندت فقط إلى أسطر تشبه أوامر لنموذج: {n}",
@@ -178,7 +180,7 @@ def gather(log: RunLog, run_id: str) -> dict:
             kept.setdefault(r["step_id"], set()).add(int(r["value"]))
         else:
             notes[(r["step_id"], r["name"])] = r["note"]
-    answers, lessons = [], []
+    answers, lessons, readiness = [], [], False
     for s in shown["steps"]:
         if s["name"] != "advise" or not s["worker"]:
             continue
@@ -191,6 +193,7 @@ def gather(log: RunLog, run_id: str) -> dict:
         out = s["output"] if isinstance(s["output"], dict) else {}
         ev = {e["id"]: e for e in inp.get("evidence", []) if isinstance(e, dict) and "id" in e}
         lessons = lessons or list(inp.get("lessons") or [])
+        readiness = readiness or "weak_cards" in inp
         pieces = []
         for n, p in enumerate(out.get("advice") or [], 1):
             lines = [ev[c] for c in p.get("cites", []) if c in ev]
@@ -210,7 +213,7 @@ def gather(log: RunLog, run_id: str) -> dict:
                         "left_out": inp.get("left_out") or 0, "rated": rated, "why": why,
                         "would_act": s["scores"].get("would_act"), "picked": s["scores"].get("picked")})
     return {"run": shown["id"], "date": (shown["started"] or "")[:10], "subject": shown["subject"] or "",
-            "answers": answers, "lessons": lessons}
+            "answers": answers, "lessons": lessons, "readiness": readiness}
 
 
 def group(answers: list[dict]) -> list[list[dict]]:
@@ -289,6 +292,8 @@ def _piece(p: dict, lang: str, hue: int, locked: list[int] | None) -> str:
         L.append(f'<details><summary>{_e(_t(lang, "lines"))} ({len(p["lines"])})</summary><ol class="lines">{items}</ol></details>')
     if p.get("figures_not_in_source"):
         L.append(f'<p class="check">{_e(_t(lang, "check", f=", ".join(p["figures_not_in_source"])))}</p>')
+    if p["lines"] and all(ln.get("weak") for ln in p["lines"]):
+        L.append(f'<p class="check weak">{_e(_t(lang, "weak"))}</p>')
     L.append(f'<label class="tick"><input type="checkbox" {tick}{off}data-worker="{_e(p["worker"])}" '
              f'data-n="{p["n"]}"> <span>{_e(_t(lang, "act"))}</span></label>')
     who = f'data-worker="{_e(p["worker"])}" data-n="{p["n"]}"'

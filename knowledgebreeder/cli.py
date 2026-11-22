@@ -21,6 +21,7 @@
     kb picture show                             how many cards, in which areas
     kb picture overlaps / gaps / reuse          the same idea twice, what is missing, what could travel
     kb picture brief                            a short list of moves worth a look
+    kb picture check                            is your picture ready for a model? five questions, and your ticks
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
     kb picture advise                           advice written by a model, held to your own cards and your lessons
     kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
@@ -139,6 +140,8 @@ def main(argv: list[str] | None = None) -> int:
     x = ps.add_parser("lesson", help="add one lesson, or list them")
     x.add_argument("text", nargs="*", help="the lesson, in your own words; none lists the lessons")
     x.add_argument("--lessons", default=lfile); x.add_argument("--today")
+    x = ps.add_parser("check", help="is your picture ready for a model? five questions, and what your ticks say")
+    x.add_argument("--json", action="store_true"); x.add_argument("--today"); x.add_argument("--runlog", default=runlog)
     x = ps.add_parser("private", help="add a name to your private list, or list it")
     x.add_argument("text", nargs="*", help="a name or word that never goes to a model off this machine; none lists them")
     x.add_argument("--private", default=pfile, metavar="PATH")
@@ -361,6 +364,8 @@ def _picture(a, dump) -> int:
     today = date.fromisoformat(a.today) if getattr(a, "today", None) else None
     if a.pic_cmd == "advise":
         return _advise(a, dump, pic, today)
+    if a.pic_cmd == "check":
+        return _check(a, dump, pic, today)
     if a.pic_cmd == "show":
         dump(reports.summary(pic))
     elif a.pic_cmd == "overlaps":
@@ -442,7 +447,8 @@ def _advise(a, dump, pic, today) -> int:
         if run:
             run.record("advise", worker=m.name, version=r["model"], subject=r["project"] or "whole picture",
                        input={"evidence": r["evidence"], "left_out": r["lines_left_out"], "lessons": r["lessons"],
-                              "held": r["held"], "lessons_held": r["lessons_held"], "flagged": r["flagged"]},
+                              "held": r["held"], "lessons_held": r["lessons_held"], "flagged": r["flagged"],
+                              "weak_cards": r["weak_cards"]},
                        output={"advice": r["advice"], "dropped": r["dropped"], "warnings": r["warnings"]},
                        duration_ms=r["ms"], tokens_in=r["tokens_in"], tokens_out=r["tokens_out"], cost=r["cost"],
                        scores=r["scores"], where=r["where"])
@@ -470,6 +476,21 @@ def _advise(a, dump, pic, today) -> int:
             if len(names) > 1:
                 print(f"Choose the better answer with: kb models pick {run.id} followed by {' or '.join(names)}.")
     return 2 if failed == len(plans) else 0
+
+
+def _check(a, dump, pic, today) -> int:
+    from .picture import check, page
+    from .runlog import RunLog, query
+    runs = []
+    if os.path.exists(a.runlog):
+        log = RunLog(a.runlog)
+        try:
+            runs = [page.gather(log, r["id"]) for r in query.runs(log, task="advise", limit=10_000)]
+        finally:
+            log.close()
+    c = check.check(pic, runs, today)
+    dump(c) if a.json else print(check.check_md(c))
+    return 0
 
 
 def _lesson(a) -> int:

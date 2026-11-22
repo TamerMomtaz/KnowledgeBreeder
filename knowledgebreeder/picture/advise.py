@@ -30,6 +30,7 @@ from datetime import date
 from .. import models
 from ..models import Answer, Model
 from ..models import client as _client
+from . import check as _check
 from . import private as _private
 from . import reports
 from .cards import met
@@ -352,14 +353,16 @@ def advise(pic: Picture, m: Model, *, allow=(), today: date | None = None, top: 
                                 "Ask a model on this machine instead.")
     reply, answer = models.ask_json(m, p.system, p.user, allow=allow, sending=p.sending())
     g = ground(reply, p.lines, today, top)
+    weak = _check.weak(pic)                 # recorded for kb's own test of whether weak cards matter; never sent
     return {"worker": m.name, "model": answer.model, "host": answer.host, "where": answer.where,
             "lines_sent": len(p.lines), "lines_left_out": p.left_out, "advice": g["kept"], "dropped": g["dropped"],
             "total": g["total"], "unreadable": g["unreadable"], "scores": scores(g), "ms": answer.ms,
             "tokens_in": answer.tokens_in, "tokens_out": answer.tokens_out, "cost": answer.cost,
             "warnings": answer.warnings, "project": pic.name(project) if project else None, "lessons": p.lessons,
             "held": p.held, "lessons_held": p.lessons_held, "flagged": [ln.id for ln in p.lines if ln.flag],
-            "evidence": [{"id": ln.id, "source": ln.source, "text": ln.text, **({"flag": True} if ln.flag else {})}
-                         for ln in p.lines]}
+            "weak_cards": sorted(pic.name(c) for c in weak),
+            "evidence": [{"id": ln.id, "source": ln.source, "text": ln.text, **({"flag": True} if ln.flag else {}),
+                          **({"weak": True} if ln.cards and set(ln.cards) <= weak else {})} for ln in p.lines]}
 
 
 def advice_md(r: dict) -> str:

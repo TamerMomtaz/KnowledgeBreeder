@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
-HEADER = ("name", "one_line", "area", "kind", "last_activity", "source", "aliases")
+HEADER = ("name", "one_line", "area", "kind", "last_activity", "source", "owner", "aliases")
 SECTIONS = ("PURPOSE", "WHAT EXISTS", "WHAT IT CAN DO", "WHAT IT NEEDS", "UNFINISHED", "IDEAS NOT STARTED",
             "REUSABLE PARTS", "LINKS TO MY OTHER WORK", "RECURRING THEMES", "OPEN DECISIONS",
             "WHAT YOU COULD NOT SEE")
