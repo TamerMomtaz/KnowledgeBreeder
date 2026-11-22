@@ -146,11 +146,12 @@ def check(pic: Picture, runs: list[dict] | None = None, today: date | None = Non
     n = len(r)
     when = [x["name"] for cid, x in r.items() if not pic.cards[cid].get("last_date")]
     share = sorted((x["filled"] / x["parts"], x["name"]) for x in r.values())
-    from . import reports
+    from . import changes, reports
     g = reports.gaps(pic, today)
+    moved = [s["name"] for s in changes.stale(pic)]
     return {
         "cards": n, "levels": {lv: sum(x["level"] == lv for x in r.values()) for lv in ("ready", "thin", "weak")},
-        "current": {"known": n - len(when), "not": when},
+        "current": {"known": n - len(when), "not": when, "file_changed": moved},
         "complete": {"median": round(median(s for s, _ in share), 2) if share else 0.0,
                      "low": [{"name": nm, "share": round(s, 2)} for s, nm in share if s < THIN]},
         "provenance": {"named": sum(x["source"] == "named" for x in r.values()),
@@ -174,7 +175,9 @@ def check_md(c: dict) -> str:
          f"Five questions asked of your {n} cards: {lv['ready']} ready, {lv['thin']} thin, {lv['weak']} weak.", ""]
     cur = c["current"]
     L.append(f"1. Does each card say when it was last worked on? {cur['known']} of {n} do."
-             + (f" Not: {', '.join(cur['not'])}." if cur["not"] else ""))
+             + (f" Not: {', '.join(cur['not'])}." if cur["not"] else "")
+             + (f" Its file changed since it was added, so the card may be out of date: {', '.join(cur['file_changed'])}."
+                " See kb picture changes." if cur.get("file_changed") else ""))
     comp = c["complete"]
     L.append(f"2. How much of each card is filled in? Half the cards have {round(100 * comp['median'])}% or more."
              + (" Under 40%: " + ", ".join(f"{x['name']} ({round(100 * x['share'])}%)" for x in comp["low"]) + "."

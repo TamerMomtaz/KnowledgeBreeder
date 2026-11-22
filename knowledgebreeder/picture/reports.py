@@ -214,6 +214,13 @@ def brief(pic: Picture, today: date | None = None, top: int = 9) -> list[dict]:
     for d in gp["open_decisions"][:2]:
         out.append({"move": f"Decide, for {d['project']}: {d['decision']}", "why": "It is listed as waiting on you.",
                     "source": [f"{d['project']} · OPEN DECISIONS"], "kind": "decision"})
+    from .changes import left_all
+    for x in left_all(pic)[:2]:
+        out.append({"move": f"Look again at what left {x['name']}: {x['text'].split(' | ')[0]}.",
+                    "why": f"It was on the card as {'an' if x['what'][0] in 'aeiou' else 'a'} {x['what']} until "
+                           f"{x['last_seen']} and is not on it now. kb cannot tell whether it was done, dropped or "
+                           "forgotten.",
+                    "source": [f"{x['name']} · older version"], "kind": "left"})
     if gp["named_without_card"]:
         names = ", ".join(x["name"] for x in gp["named_without_card"][:5])
         out.append({"move": f"Add a card for: {names}.",

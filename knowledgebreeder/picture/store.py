@@ -51,12 +51,27 @@ def _name_parts(name: str) -> list[str]:
     return parts
 
 
+META = ("origin", "recorded", "fingerprint")        # about where and when kb read a card, not what it says
+
+
+def _says(c: dict) -> dict:
+    return {k: v for k, v in c.items() if k not in META and v not in ("", [], {}, None)}
+
+
+def same(a: dict, b: dict) -> bool:
+    """True when two versions of a card say the same thing. A part left empty and a part a newer kb reads but an
+    older one did not (such as owner) count as the same."""
+    return _says(a) == _says(b)
+
+
 class Picture:
     """Cards keyed by id, plus areas the person has named that hold no card yet."""
 
-    def __init__(self, cards: dict[str, dict] | None = None, areas: list[str] | None = None):
+    def __init__(self, cards: dict[str, dict] | None = None, areas: list[str] | None = None,
+                 history: dict[str, list[dict]] | None = None):
         self.cards: dict[str, dict] = cards or {}
         self.areas: list[str] = areas or []
+        self.history: dict[str, list[dict]] = history or {}     # older versions of a card, oldest first
         self._index = None
 
     # ---- file ---------------------------------------------------------------------------------------------
@@ -69,7 +84,8 @@ class Picture:
         text = p.read_text(encoding="utf-8")
         if p.suffix.lower() == ".json":
             data = json.loads(text)
-            return cls({c["id"]: c for c in data.get("cards", [])}, list(data.get("areas", [])))
+            return cls({c["id"]: c for c in data.get("cards", [])}, list(data.get("areas", [])),
+                       {k: list(v) for k, v in data.get("history", {}).items()})
         pic = cls()
         pic.add(cardmod.parse(text, origin=p.name))
         return pic
@@ -78,17 +94,35 @@ class Picture:
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         data = {"version": VERSION, "areas": self.areas, "cards": list(self.cards.values())}
+        if self.history:
+            data["history"] = self.history
         p.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         return p
 
-    def add(self, cards: list[dict]) -> dict:
-        """Merge cards in. A card with a name already held replaces the older one."""
-        added, updated = [], []
+    def add(self, cards: list[dict], recorded: str | None = None, fingerprint: str | None = None) -> dict:
+        """Merge cards in. Nothing is overwritten: a card with a name already held that now says something else
+        becomes the current version, and the older one is kept in the card's history. The same card again changes
+        nothing. ``recorded`` is the day kb learned the card, ``fingerprint`` the file's, so a later change to the
+        file shows."""
+        added, updated, unchanged = [], [], []
         for c in cards:
-            (updated if c["id"] in self.cards else added).append(c["name"])
+            if recorded:
+                c["recorded"] = recorded
+            if fingerprint:
+                c["fingerprint"] = fingerprint
+            old = self.cards.get(c["id"])
+            if old is not None and same(old, c):
+                unchanged.append(c["name"])
+                for k in ("origin", "fingerprint"):            # where it was read last; when it was learned stays
+                    if c.get(k):
+                        old[k] = c[k]
+                continue
+            if old is not None:
+                self.history.setdefault(c["id"], []).append(old)
+            (updated if old is not None else added).append(c["name"])
             self.cards[c["id"]] = c
         self._index = None
-        return {"added": added, "updated": updated}
+        return {"added": added, "updated": updated, "unchanged": unchanged}
 
     def add_area(self, name: str) -> bool:
         if name.strip() and name.strip().lower() not in {a.lower() for a in self.all_areas()}:

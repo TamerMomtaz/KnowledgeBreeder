@@ -22,6 +22,7 @@
     kb picture overlaps / gaps / reuse          the same idea twice, what is missing, what could travel
     kb picture brief                            a short list of moves worth a look
     kb picture check                            is your picture ready for a model? five questions, and your ticks
+    kb picture changes                          what changed on your cards, and what left them; nothing is overwritten
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
     kb picture advise                           advice written by a model, held to your own cards and your lessons
     kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
@@ -103,7 +104,11 @@ def main(argv: list[str] | None = None) -> int:
     ps = pc.add_subparsers(dest="pic_cmd", required=True)
     x = ps.add_parser("add"); x.add_argument("cards", nargs="*", help="files holding PROJECT CARDs")
     x.add_argument("--area", action="append", default=[], help="name an area that has no card yet")
+    x.add_argument("--today", help="the day kb learned these cards (YYYY-MM-DD), default today")
     ps.add_parser("show")
+    x = ps.add_parser("changes", help="what changed on your cards, and what left them")
+    x.add_argument("project", nargs="?", help="one project's versions, by name")
+    x.add_argument("--json", action="store_true")
     for name in ("overlaps", "gaps", "reuse", "brief"):
         x = ps.add_parser(name); x.add_argument("--json", action="store_true")
         if name in ("gaps", "brief"):
@@ -336,14 +341,25 @@ def _picture(a, dump) -> int:
     if a.pic_cmd == "add":
         if not a.cards and not a.area:
             raise KeyError("give at least one cards file, or --area NAME")
+        from .picture import changes
         pic = Picture.load(a.file) if os.path.exists(a.file) else Picture()
-        out = {"added": [], "updated": [], "areas_added": [], "no_cards_in": []}
+        day = (date.fromisoformat(a.today) if a.today else date.today()).isoformat()
+        out = {"added": [], "updated": [], "unchanged": [], "changed": {}, "areas_added": [], "no_cards_in": []}
         for path in a.cards:
-            found = cards.parse_file(path)
+            with open(path, "rb") as f:
+                raw = f.read()
+            found = cards.parse(raw.decode("utf-8"), origin=str(path))
             if not found:
                 out["no_cards_in"].append(path)
-            res = pic.add(found)
-            out["added"] += res["added"]; out["updated"] += res["updated"]
+            res = pic.add(found, recorded=day, fingerprint=changes.fingerprint(raw))
+            for k in ("added", "updated", "unchanged"):
+                out[k] += res[k]
+            for c in found:
+                if c["name"] in res["updated"]:
+                    vs = changes.versions(pic, c["id"])
+                    out["changed"][c["name"]] = changes.line(changes.diff(vs[-2], vs[-1]))
+        if out["updated"]:
+            out["see"] = "kb picture changes: what changed, and what left a card. Older versions are kept."
         out["areas_added"] = [n for n in a.area if pic.add_area(n)]
         if not a.file.lower().endswith(".json"):
             raise KeyError(f"--file must be a .json file to save into, got {a.file}")
@@ -366,6 +382,18 @@ def _picture(a, dump) -> int:
         return _advise(a, dump, pic, today)
     if a.pic_cmd == "check":
         return _check(a, dump, pic, today)
+    if a.pic_cmd == "changes":
+        from .picture import changes
+        project = None
+        if a.project:
+            found = pic.resolve(a.project)
+            if len(found) != 1:
+                raise KeyError(f"'{a.project}' does not name one project. The picture holds: "
+                               f"{', '.join(c['name'] for c in pic.cards.values())}.")
+            project = found[0]
+        c = changes.changes(pic, project)
+        dump(c) if a.json else print(changes.changes_md(c), end="")
+        return 0
     if a.pic_cmd == "show":
         dump(reports.summary(pic))
     elif a.pic_cmd == "overlaps":

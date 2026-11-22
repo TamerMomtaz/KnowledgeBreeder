@@ -186,7 +186,7 @@ kb picture --file tests/fixtures/demo_cards.md brief
 kb picture --file tests/fixtures/demo_cards.md town --out work/demo-town.html
 ```
 
-With your own cards, merge them into your picture first. Adding a card again replaces the older one.
+With your own cards, merge them into your picture first. Adding a card again keeps the older one (see below).
 
 ```bash
 kb picture add my-cards.md
@@ -247,6 +247,33 @@ which cards were weak at the time and marks each evidence line that rests only o
 and the page marks such a piece. `kb picture check` then counts, over your rated runs, how many pieces you would act
 on when they rest only on weak cards, against the rest. It waits for five rated pieces on each side before it says
 the numbers mean anything.
+
+### Nothing overwritten
+
+When you add a card that the picture already holds, and it now says something else, the new one becomes the
+current card and the older one is kept, with the day kb learned it and a fingerprint of the file it came from. The
+same card added again changes nothing. `kb picture add` says, for each card that changed, what left it.
+
+```bash
+kb picture changes
+```
+
+shows, for every card with older versions:
+
+- **No longer on a card**: every idea, need, unfinished piece of work or open decision that was on a card once and
+  is not now, with the day it was last seen. kb cannot tell whether it was done, dropped or forgotten. You can, and
+  a forgotten one is a chance found before it is missed. The brief lists the newest two, and advice runs get them
+  as evidence lines, through the same private-list check as every other line.
+- **The newest version against the one before**: header lines that changed, items that came and went, and needs
+  that changed from not met to met. An item reworded keeps its place; it is matched by most of its words.
+- **Files changed since you added them**: a card whose file is still there and no longer matches its fingerprint.
+  Add it again to see what changed. `kb picture check` names these cards under its first question.
+- **Where two cards that may be one project differ**: their kind or their last activity, with both sides and the
+  file each came from. Neither side is taken as right.
+
+Name one project to see only its versions: `kb picture changes "Corner bakery"`. The rules are old ones from
+record-keeping: nothing is updated in place, a fact keeps when it was true and when it was learned, a file is
+fingerprinted when it comes in, and a disagreement shows both sides in neutral words.
 
 Your picture is private. It is one local file, `work/picture.json` by default, and `work/` is ignored by git.
 The town file holds your picture too, so treat it the same way. The page asks the network for nothing, and a
