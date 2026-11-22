@@ -100,10 +100,10 @@ h2,.district h2,.panel h2{font-family:var(--display);font-stretch:condensed;font
 .tick:has(input:checked)::after{content:"\2713";margin-inline-start:auto;flex:none;width:32px;height:32px;border:2.5px solid var(--seal);
   border-radius:50%;display:grid;place-items:center;color:var(--seal);font-weight:900;transform:rotate(-14deg)}
 .tick input,.none input,.radio input,.keep input{accent-color:var(--seal)}
-.copy,.save,#add,.btn[aria-pressed="true"],.chip[aria-pressed="true"],.pick.sel{
+.copy,.save,#add,#send,.btn[aria-pressed="true"],.chip[aria-pressed="true"],.pick.sel{
   background:var(--seal);border-color:var(--seal);color:var(--seal-ink)}
-.copy,.save,#add{border-radius:3px;box-shadow:3px 3px 0 var(--drop)}
-.copy:active,.save:active,#add:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--drop)}
+.copy,.save,#add,#send{border-radius:3px;box-shadow:3px 3px 0 var(--drop)}
+.copy:active,.save:active,#add:active,#send:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--drop)}
 .btn,.chip,.lang,.close,.bar select,.bar input,.pick,input.reason,.change-text,textarea{border-radius:3px}
 .btn,.chip,.lang,.close{border:1.5px solid var(--frame)}
 .tab[aria-selected="true"]{border-bottom-color:var(--seal)}
