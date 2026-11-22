@@ -28,6 +28,7 @@ area: (the part of my life or work it belongs to, e.g. software platform, music,
 kind: (running product / being built / paused / idea only / finished / other)
 last_activity: (date or rough period of the most recent real work, or unknown)
 source: (which tool or platform this card comes from, and what you could see: code, documents, chat only)
+owner: (who keeps these facts true, when that is someone other than me, such as a client; else leave it empty)
 
 PURPOSE
 problem: (what it is for)

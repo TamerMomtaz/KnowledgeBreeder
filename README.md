@@ -230,6 +230,24 @@ kb picture town --out work/town.html --lang ar
   reports are in the same file. It switches between English and Arabic, works by keyboard, and every project is
   also a plain button in a list.
 
+### Is it ready for a model?
+
+```bash
+kb picture check
+```
+
+asks every card the five questions of a data-ready check: does it say when the project was last worked on, how much
+of it is filled in, where its facts come from (and whether that is more than memory), whether one project goes by
+two names (or one name fits two cards, or an area is written two ways), and who keeps its facts true. A card with no
+gap is ready, with one gap thin, with two or more weak; the weak ones are listed first, with what is missing. A card
+can name its owner with an `owner:` line in its header, for facts that belong to someone else, such as a client.
+
+"A model is only as useful as the data under it" is a claim, and your ticks can test it. Every advice run records
+which cards were weak at the time and marks each evidence line that rests only on weak cards. The model is not told,
+and the page marks such a piece. `kb picture check` then counts, over your rated runs, how many pieces you would act
+on when they rest only on weak cards, against the rest. It waits for five rated pieces on each side before it says
+the numbers mean anything.
+
 Your picture is private. It is one local file, `work/picture.json` by default, and `work/` is ignored by git.
 The town file holds your picture too, so treat it the same way. The page asks the network for nothing, and a
 content security policy inside it forbids it.
