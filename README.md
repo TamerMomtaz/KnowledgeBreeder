@@ -553,6 +553,52 @@ A saved page is someone else's text: the model is told to treat it as data, and 
 the text does not show, but a page written to mislead can still waste your time. The run log stores the evidence
 lines that were sent, so treat `runs.db` and `work/` as private.
 
+## Your agents
+
+An agent is any program that reads your data and does something with it by itself: a bot that answers customers, a
+script that posts a weekly sheet, a model that writes code. Each one should have a record, the way a person on a
+team has a staff file. Make the file once:
+
+```bash
+kb agents init
+```
+
+It writes `work/agents.md` (or `--file PATH`, or the `KB_AGENTS` variable), which is private. Fill in one block per
+agent, in your own words; only the name is needed:
+
+```text
+name: Shop replier
+does: answers questions on the shop page
+runs: outside (a hosting service)
+reads: customer messages; the price list
+sends: api.example.com
+keys: SHOP_MODEL_KEY
+may: send, reply
+ratifies: nobody
+owner: Nour
+stop: switch off the page's chat box
+passes: Weekly totals
+last_run: 2026-11-18
+```
+
+Then see the register, with kb's own models added from your models file and their last run read from the run log:
+
+```bash
+kb agents
+```
+
+The fields follow the five layers of ARM, Agent Resource Management (Momtaz, 2026, SSRN 6380498): the owner is the
+accountability chain, the register is the stewardship register, who ratifies is the prospective review, how to stop
+it is the override protocol, and whom it passes work to is the inter-agent council. What needs a look is a gap in a
+layer: an agent that may send, pay or change things with nobody ratifying first; work that leaves this machine and
+your network with nobody's yes, also through an agent it passes work to; no owner; no written way to stop it; a
+name from your private list in what it reads while its work leaves; a key still held months after the last run;
+one key shared by two agents; work passed to an agent with no record.
+
+A key goes in by its variable's name. A file that holds what looks like a real key is refused, and kb does not
+print the key back. kb reads what you wrote and does not inspect the agents, so a record is only as true as its
+writer. `--json` gives the register and the findings as data.
+
 ## Limits, plainly
 
 - No method reads every connection on a real P&ID correctly. An engineer must review the graph before it is used for

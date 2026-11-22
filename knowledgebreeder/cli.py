@@ -30,6 +30,7 @@
     kb picture trail                            who did what in that run, step by step, as a Vn-trail
 
     kb models init / list / check               which models kb may ask, and where each one lives
+    kb agents                                   your agents' register, and what in it needs a person's look
     kb models pick RUN NAME                     record which model's answer you chose
     kb models add gemini                        add a provider kb knows (openai, gemini, kimi, deepseek, claude)
     kb serve                                    your advice runs as pages on this machine, ticks saved as you go
@@ -174,6 +175,14 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--as", dest="as_name", help="the name to give the entry, default the provider's")
     x.add_argument("--model", help="a different model id at that provider")
     x.add_argument("--force", action="store_true", help="write the entry again if it is there")
+    ag = sub.add_parser("agents", help="a register of your agents, and what in it needs a person's look")
+    ag.add_argument("action", nargs="?", choices=["list", "init"], default="list",
+                    help="list (the default) shows the register; init makes the file to fill in")
+    ag.add_argument("--file", default=os.environ.get("KB_AGENTS", "work/agents.md"), help="your agents file")
+    ag.add_argument("--models-file", default=mfile); ag.add_argument("--runlog", default=runlog)
+    ag.add_argument("--private", default=pfile, metavar="PATH")
+    ag.add_argument("--today"); ag.add_argument("--quiet-days", type=int, default=90)
+    ag.add_argument("--json", action="store_true"); ag.add_argument("--force", action="store_true")
     sv = sub.add_parser("serve", help="your advice runs as pages, served on this machine only")
     sv.add_argument("--port", type=int, default=8765)
     sv.add_argument("--runlog", default=runlog)
@@ -229,10 +238,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
-    if a.cmd in ("picture", "models", "scout", "serve"):
+    if a.cmd in ("picture", "models", "scout", "serve", "agents"):
         from .models import ModelError, Refused
         try:
-            return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve}[a.cmd](a, dump)
+            return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve,
+                    "agents": _agents}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
@@ -715,6 +725,26 @@ def _models(a, dump) -> int:
         print(f"Recorded: {a.name} was picked over {', '.join(r['over']) or 'no other'} in {r['run']}. "
               f"See the standing with: kb log --db {a.db} workers --score picked")
         return 0
+    return 0
+
+
+def _agents(a, dump) -> int:
+    from datetime import date
+
+    from . import agents, models
+    from .picture.private import Private
+    if a.action == "init":
+        path = agents.init(a.file, a.force)
+        print(f"{path}: ready to fill in, one block per agent. It is private: keep it out of any repository.\n"
+              f"Then see the register with: kb agents" + (f" --file {a.file}" if a.file != "work/agents.md" else ""))
+        return 0
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    mine = agents.read(a.file)
+    kb = agents.from_models(models.load(a.models_file), agents.last_runs(a.runlog)) \
+        if os.path.exists(a.models_file) else []
+    every = mine + kb
+    found = agents.review(every, today, Private.load(a.private), a.quiet_days)
+    dump(agents.as_json(every, found)) if a.json else print(agents.register_md(every, found, today, a.file))
     return 0
 
 
