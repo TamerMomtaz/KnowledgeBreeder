@@ -24,6 +24,7 @@
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
     kb picture advise                           advice written by a model, held to your own cards and your lessons
     kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
+    kb picture private "Dar Bakery"             a name that never goes to a model off this machine
     kb picture rate RUN 1 6                     mark the pieces you would act on; the share is kb's score
     kb picture page                             your newest advice run as one page: every model in one list, tick boxes
     kb picture trail                            who did what in that run, step by step, as a Vn-trail
@@ -40,7 +41,9 @@ The run log is one SQLite file: --db PATH, or the KB_RUNLOG variable, or runs.db
 The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, or work/picture.json here.
 The models file is private too: --models-file PATH, or the KB_MODELS variable, or work/models.json here.
 Your lessons are one private Markdown file: --lessons PATH, or the KB_LESSONS variable, or work/lessons.md here.
-A model on this machine is asked freely. Any other needs --allow NAME, for that one run.
+Your private list is one too: --private PATH, or the KB_PRIVATE variable, or work/private.md here.
+A model on this machine is asked freely and sees everything. Any other needs --allow NAME, for that one run, and
+never gets a line that holds a phone, an email, a key, an amount of money, a name on your private list, or #private.
 """
 
 from __future__ import annotations
@@ -110,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--quiet-days", type=int, default=90)
     mfile = os.environ.get("KB_MODELS", "work/models.json")
     runlog = os.environ.get("KB_RUNLOG", "runs.db")
+    pfile = os.environ.get("KB_PRIVATE", "work/private.md")
 
     def asking(x):
         x.add_argument("--models-file", default=mfile, help="the models file")
@@ -119,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
         x.add_argument("--json", action="store_true")
         x.add_argument("--runlog", default=runlog, help="record the run in this run log")
         x.add_argument("--no-log", action="store_true", help="do not record the run")
+        x.add_argument("--private", default=pfile, metavar="PATH",
+                       help="your private list: names that never go to a model off this machine")
 
     x = ps.add_parser("advise"); asking(x)
     x.add_argument("--model", help="which model writes the advice, default the file's default")
@@ -132,6 +138,9 @@ def main(argv: list[str] | None = None) -> int:
     x = ps.add_parser("lesson", help="add one lesson, or list them")
     x.add_argument("text", nargs="*", help="the lesson, in your own words; none lists the lessons")
     x.add_argument("--lessons", default=lfile); x.add_argument("--today")
+    x = ps.add_parser("private", help="add a name to your private list, or list it")
+    x.add_argument("text", nargs="*", help="a name or word that never goes to a model off this machine; none lists them")
+    x.add_argument("--private", default=pfile, metavar="PATH")
     x = ps.add_parser("rate", help="mark which pieces of a run's advice you would act on")
     x.add_argument("run"); x.add_argument("pieces", nargs="+", help="the numbers of the pieces you would act on, or: none")
     x.add_argument("--worker", help="whose answer, when the run holds several")
@@ -330,6 +339,8 @@ def _picture(a, dump) -> int:
         return 0
     if a.pic_cmd == "lesson":
         return _lesson(a)
+    if a.pic_cmd == "private":
+        return _private_list(a)
     if a.pic_cmd == "rate":
         return _rate(a)
     if a.pic_cmd == "page":
@@ -387,17 +398,21 @@ def _advise(a, dump, pic, today) -> int:
     if not pic.cards:
         raise KeyError("the picture holds no cards yet. Add some with: kb picture add CARDS.md")
     from .picture import lessons as les
+    from .picture.private import Private
     taught, old = ([], 0) if a.no_lessons else les.fit(les.read(a.lessons))
+    guard = Private.load(a.private)
     plans = []
     for m in chosen:                                        # every destination is checked before anything is sent
-        lines, left = adv.evidence(pic, m.budget, today, project)
-        system, user = adv.prompt(lines, left, today, a.top, a.lang, pic.name(project) if project else None, taught)
+        p = adv.plan(pic, m, today=today, top=a.top, lang=a.lang, project=project, lessons=taught, private=guard)
         if a.show_prompt:
-            host, where = models.place(m.url)
-            print(f"--- to {m.name} ({m.model}) at {host}, {where}: {len(system) + len(user):,} characters. "
-                  f"Nothing was sent.\n\n{system}\n\n{user}\n")
+            kept = f" {p.sending().partition('; ')[2]}." if p.held or p.lessons_held else ""
+            print(f"--- to {m.name} ({m.model}) at {p.host}, {p.where}: {p.chars:,} characters.{kept} "
+                  f"Nothing was sent.\n\n{p.system}\n\n{p.user}\n")
             continue
-        models.gate(m, a.allow, len(system) + len(user), adv.sending(len(lines), len(taught)))
+        if not p.lines:
+            raise KeyError(f"every line kb could send {m.name} is private ({p.sending().partition('; ')[2]}), so "
+                           f"nothing was sent. Ask a model on this machine instead.")
+        models.gate(m, a.allow, p.chars, p.sending())
         plans.append(m)
     if a.show_prompt:
         return 0
@@ -405,7 +420,8 @@ def _advise(a, dump, pic, today) -> int:
     results, failed = [], 0
     for m in plans:
         try:
-            r = adv.advise(pic, m, allow=a.allow, today=today, top=a.top, lang=a.lang, project=project, lessons=taught)
+            r = adv.advise(pic, m, allow=a.allow, today=today, top=a.top, lang=a.lang, project=project, lessons=taught,
+                           private=guard)
         except models.ModelError as e:
             failed += 1
             results.append({"worker": m.name, "model": m.model, "error": str(e)})
@@ -415,7 +431,8 @@ def _advise(a, dump, pic, today) -> int:
         results.append(r)
         if run:
             run.record("advise", worker=m.name, version=r["model"], subject=r["project"] or "whole picture",
-                       input={"evidence": r["evidence"], "left_out": r["lines_left_out"], "lessons": r["lessons"]},
+                       input={"evidence": r["evidence"], "left_out": r["lines_left_out"], "lessons": r["lessons"],
+                              "held": r["held"], "lessons_held": r["lessons_held"], "flagged": r["flagged"]},
                        output={"advice": r["advice"], "dropped": r["dropped"], "warnings": r["warnings"]},
                        duration_ms=r["ms"], tokens_in=r["tokens_in"], tokens_out=r["tokens_out"], cost=r["cost"],
                        scores=r["scores"], where=r["where"])
@@ -460,6 +477,21 @@ def _lesson(a) -> int:
     print(("Added. " if new else "That lesson is already there. ") + f"{len(have)} lesson{'' if len(have) == 1 else 's'} "
           f"in {a.lessons}; "
           f"every advice run follows them" + (f", except the {old} oldest, which no longer fit" if old else "") + ".")
+    return 0
+
+
+def _private_list(a) -> int:
+    from .picture import private
+    if not a.text:
+        have = private.Private.load(a.private).terms
+        print(f"{len(have)} name{'' if len(have) == 1 else 's'} on your private list in {a.private}"
+              + (":\n" + "\n".join(f"  {t}" for t in have) if have else
+                 '. Add one with: kb picture private "a name that stays on this machine"'))
+        print("A model on this machine still sees them. A model anywhere else never gets a line that holds one.")
+        return 0
+    have, new = private.add(a.private, " ".join(a.text))
+    print(("Added. " if new else "That name is already there. ") + f"{len(have)} name{'' if len(have) == 1 else 's'} "
+          f"on your private list in {a.private}. No model off this machine will get a line that holds one.")
     return 0
 
 
@@ -703,10 +735,12 @@ def _scout(a, dump) -> int:
     files = scout.sources(a.paths)
     if not files:
         raise KeyError(f"no .txt, .md or .html file in: {', '.join(a.paths)}")
+    from .picture.private import Private
+    guard = Private.load(a.private)
     chars = sum(min(len(scout.read_source(f)), m.budget) for f in files)
-    models.gate(m, a.allow, chars, f"{len(files)} saved sources and one line about each of your projects")   # before any run or line
+    models.gate(m, a.allow, chars, scout.sending(len(files), scout.held(pic, m, guard)))   # before any run or line
     log, run = _open_log(a, "scout", m.name, f"{len(files)} sources")
-    rows = scout.watch(pic, files, m, ledger, allow=a.allow, today=today, again=a.again)
+    rows = scout.watch(pic, files, m, ledger, allow=a.allow, today=today, again=a.again, private=guard)
     if run:
         for r in rows:
             if r.get("seen_before") or "ms" not in r and r["verdict"] != "error":

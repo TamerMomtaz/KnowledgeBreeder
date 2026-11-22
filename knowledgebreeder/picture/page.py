@@ -26,7 +26,7 @@ from importlib import resources
 from pathlib import Path
 
 from ..runlog import RunLog, query
-from . import trail
+from . import private, trail
 
 HUES = (208, 152, 28, 276, 332, 96, 46, 184)
 _WORD = re.compile(r"\w+")
@@ -52,6 +52,7 @@ LABELS = {
         "lines": "The lines it cites", "check": "Check: {f} is in none of the lines it cites.",
         "kind_do": "do", "kind_stop": "stop", "kind_join": "join", "kind_decide": "decide", "kind_ask": "ask",
         "who_h": "Who answered", "read": "read {n} lines", "left_out": "{n} more did not fit",
+        "held": "{n} kept on this machine: private", "orders": "{n} rested only on lines that read like instructions",
         "shown": "{n} pieces shown", "dropped": "{n} cited no line kb sent, so they are not shown",
         "failed": "gave nothing: {e}", "note": "Note: {w}",
         "here": "on this machine", "network": "on your network", "outside": "outside this machine",
@@ -99,6 +100,7 @@ LABELS = {
         "lines": "الأسطر التي تستند إليها", "check": "تحقق: {f} غير موجود في أي من الأسطر التي تستند إليها.",
         "kind_do": "افعل", "kind_stop": "توقف", "kind_join": "اربط", "kind_decide": "قرر", "kind_ask": "اسأل",
         "who_h": "من أجاب", "read": "الأسطر المقروءة: {n}", "left_out": "لم يتسع: {n}",
+        "held": "بقيت على هذا الجهاز لأنها خاصة: {n}", "orders": "استندت فقط إلى أسطر تشبه أوامر لنموذج: {n}",
         "shown": "النصائح المعروضة: {n}", "dropped": "لم تستند إلى أي سطر أرسله kb فلم تُعرض: {n}",
         "failed": "لم يقدم شيئاً: {e}", "note": "ملاحظة: {w}",
         "here": "على هذا الجهاز", "network": "على شبكتك", "outside": "خارج هذا الجهاز",
@@ -200,7 +202,10 @@ def gather(log: RunLog, run_id: str) -> dict:
         for p in pieces:
             if p["n"] in own.get(s["id"], {}):
                 p["change"], p["kept"] = own[s["id"]][p["n"]], p["n"] in kept.get(s["id"], set())
-        answers.append({**a, "pieces": pieces, "dropped": len(out.get("dropped") or []),
+        dropped = [d for d in out.get("dropped") or [] if isinstance(d, dict)]
+        orders = sum(d.get("reason") == private.ORDER_ONLY for d in dropped)
+        answers.append({**a, "pieces": pieces, "dropped": len(dropped) - orders, "dropped_orders": orders,
+                        "held": sum((inp.get("held") or {}).values()), "lessons_held": inp.get("lessons_held") or 0,
                         "warnings": list(out.get("warnings") or []), "lines_sent": len(ev),
                         "left_out": inp.get("left_out") or 0, "rated": rated, "why": why,
                         "would_act": s["scores"].get("would_act"), "picked": s["scores"].get("picked")})
@@ -332,9 +337,13 @@ def _who(a: dict, lang: str, hue: int) -> str:
     else:
         bits.append(_e(_t(lang, "read", n=a["lines_sent"])) + (", " + _e(_t(lang, "left_out", n=a["left_out"]))
                                                                if a["left_out"] else ""))
+        if a.get("held"):
+            bits.append(_e(_t(lang, "held", n=a["held"])))
         bits.append(_e(_t(lang, "shown", n=len(a["pieces"]))))
         if a["dropped"]:
             bits.append(_e(_t(lang, "dropped", n=a["dropped"])))
+        if a.get("dropped_orders"):
+            bits.append(_e(_t(lang, "orders", n=a["dropped_orders"])))
     if a["ms"]:
         bits.append(f"<bdi>{a['ms'] / 1000:.1f} s</bdi>")
     if a["cost"]:

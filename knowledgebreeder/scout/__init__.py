@@ -21,8 +21,8 @@ else's text: the model is told to treat it as data, and kb believes nothing the
 model says about it that the text does not show.
 """
 
-from .scout import (Ledger, check, excerpt, match, open_now, prompt, read_source, scout_md, log_md, sources, verdicts,
-                    watch)
+from .scout import (Ledger, check, excerpt, held, log_md, match, open_now, prompt, read_source, scout_md, sending,
+                    sources, verdicts, watch)
 
-__all__ = ["Ledger", "check", "excerpt", "log_md", "match", "open_now", "prompt", "read_source", "scout_md",
-           "sources", "verdicts", "watch"]
+__all__ = ["Ledger", "check", "excerpt", "held", "log_md", "match", "open_now", "prompt", "read_source", "scout_md",
+           "sending", "sources", "verdicts", "watch"]
