@@ -511,6 +511,24 @@ one file that opens with no internet and asks the network for nothing.
 `--lang ar` writes the page in Arabic. It holds lines from your cards, so it stays in `work/`, which is never
 committed.
 
+#### The look, and your record
+
+Every page kb draws (this one, the list on your phone, the town and the plant walk) wears one look: a title card
+in a heavy ink frame, panels with hard shadows, gold for what you have earned and a red seal for what you decide.
+It follows your system's light or dark setting, uses only the fonts on your machine, and moves only if your system
+allows motion.
+
+The advice page and the list on your phone carry a small record in the title card. It counts only what you did:
+
+- A review is one model's answer you rated. Every five reviews is a level.
+- A streak is the days in a row that hold a run you rated, counted to today or yesterday.
+- Each model wears a rank, from how often you would act on its advice over every run you rated: S at 70% or more,
+  A at 50%, B at 35%, C at 20%, D below that. A model with no rated run has no rank yet.
+
+Nothing is scored for opening a page or for ticking more. The rank is the same share as the "So far" row of the
+table at the bottom of the page, taken over every run you rated rather than the last twelve, and shown where you
+read the model's answer.
+
 ### The trail of a run
 
 Every advice run is a piece of work done by you and one or more models together. kb records each step of it in the

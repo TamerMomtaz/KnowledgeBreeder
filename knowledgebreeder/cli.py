@@ -635,13 +635,15 @@ def _page(a) -> int:
         if not newest:
             raise KeyError(f"{a.runlog} holds no advice run yet. Make one with: kb picture advise")
         run_id = newest[0]["id"]
+    from . import theme
     data = page.gather(log, run_id)
     hist = page.history(log)
+    today = date.fromisoformat(a.today) if a.today else None
+    record = theme.standing(page.history(log, limit=1_000_000), today)
     log.close()
     same = os.path.abspath(a.runlog) == os.path.abspath(os.environ.get("KB_RUNLOG", "runs.db"))
-    today = date.fromisoformat(a.today) if a.today else None
     out = page.write(a.out or Path("work") / "advice" / f"{run_id}.html",
-                     page.build(data, hist, lang=a.lang, log_flag=None if same else a.runlog, today=today))
+                     page.build(data, hist, lang=a.lang, log_flag=None if same else a.runlog, today=today, record=record))
     n = sum(len(x["pieces"]) for x in data["answers"])
     joined = sum(len(g) > 1 for g in page.group(data["answers"]))
     who = ", ".join(x["worker"] for x in data["answers"]) or "nobody"

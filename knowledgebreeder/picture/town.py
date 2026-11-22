@@ -27,6 +27,7 @@ from datetime import date
 from importlib import resources
 from pathlib import Path
 
+from .. import theme
 from . import reports
 from .cards import by_what, met
 from .store import Picture
@@ -248,9 +249,9 @@ def build(pic: Picture, today: date | None = None, title: str | None = None, lan
     blob = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")     # card text can never close the script
     page = resources.files(__package__).joinpath("town.html").read_text(encoding="utf-8")
     shown = html.escape(title or LABELS[lang]["title"])
-    return (page.replace("__LANG__", lang).replace("__DIR__", "rtl" if lang == "ar" else "ltr")
-            .replace("__TITLE__", shown).replace("<!--__DISTRICTS__-->", "".join(blocks))
-            .replace("/*__DATA__*/", blob))
+    return theme.inject(page.replace("__LANG__", lang).replace("__DIR__", "rtl" if lang == "ar" else "ltr")
+                        .replace("__TITLE__", shown).replace("<!--__DISTRICTS__-->", "".join(blocks))
+                        .replace("/*__DATA__*/", blob))
 
 
 def write(pic: Picture, path: str | Path, **kw) -> Path:

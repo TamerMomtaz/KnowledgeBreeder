@@ -29,6 +29,7 @@ from datetime import date
 from importlib import resources
 from pathlib import Path
 
+from .. import theme
 from ..graph import PlantGraph
 from ..use import manipulation, research, statistics
 from ..use.common import ISOLATION_KINDS, LEVEL_KINDS, PUMP_KINDS, attrs, instruments_near, is_equipment, kind, sheet
@@ -519,9 +520,9 @@ def build(pg: PlantGraph, title: str | None = None, lang: str = "en", today: dat
     blob = json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")     # plant text can never close the script
     page = resources.files(__package__).joinpath("plant.html").read_text(encoding="utf-8")
     head = html.escape(title or plant or LABELS[lang]["title"])
-    return (page.replace("__LANG__", lang).replace("__DIR__", "rtl" if lang == "ar" else "ltr")
-            .replace("__TITLE__", head).replace("<!--__PLANT__-->", dr.svg(marks))
-            .replace("<!--__NAMES__-->", names).replace("/*__DATA__*/", blob))
+    return theme.inject(page.replace("__LANG__", lang).replace("__DIR__", "rtl" if lang == "ar" else "ltr")
+                        .replace("__TITLE__", head).replace("<!--__PLANT__-->", dr.svg(marks))
+                        .replace("<!--__NAMES__-->", names).replace("/*__DATA__*/", blob))
 
 
 def write(pg: PlantGraph, path: str | Path, **kw) -> Path:
