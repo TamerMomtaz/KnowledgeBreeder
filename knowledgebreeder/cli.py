@@ -35,7 +35,10 @@
     kb agents                                   your agents' register, and what in it needs a person's look
     kb models pick RUN NAME                     record which model's answer you chose
     kb models add gemini                        add a provider kb knows (openai, gemini, kimi, deepseek, claude)
-    kb serve                                    your advice runs as pages on this machine, ticks saved as you go
+    kb serve                                    your inbox and advice runs as pages on this machine, for your phone
+    kb inbox                                    what you sent: posts, links, screenshots, PDFs, Word files, voice notes
+    kb inbox add FILES --note "why I kept it"   put files from this laptop in the inbox too
+    kb inbox show ID                            one item, with the text kb read from it
     kb scout read work/sources                  read saved pages against your projects, look for chances
     kb scout log                                everything the scout read, with what it passed over and why
 
@@ -45,6 +48,7 @@ The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, o
 The models file is private too: --models-file PATH, or the KB_MODELS variable, or work/models.json here.
 Your lessons are one private Markdown file: --lessons PATH, or the KB_LESSONS variable, or work/lessons.md here.
 Your private list is one too: --private PATH, or the KB_PRIVATE variable, or work/private.md here.
+Your inbox is one private folder: --inbox PATH, or the KB_INBOX variable, or work/inbox here.
 A model on this machine is asked freely and sees everything. Any other needs --allow NAME, for that one run, and
 never gets a line that holds a phone, an email, a key, an amount of money, a name on your private list, or #private.
 """
@@ -196,7 +200,15 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--runlog", default=runlog)
     sv.add_argument("--lessons", default=os.environ.get("KB_LESSONS", "work/lessons.md"))
     sv.add_argument("--lang", choices=["en", "ar"], default="en")
+    sv.add_argument("--inbox", default=os.environ.get("KB_INBOX", "work/inbox"), help="where what you send is kept")
     sv.add_argument("--open", action="store_true", help="open it in your browser")
+    ib = sub.add_parser("inbox", help="what you sent from the phone: posts, links, screenshots, files, voice notes")
+    ib.add_argument("action", nargs="?", choices=["list", "add", "show"], default="list",
+                    help="list (the default), add files from this laptop, or show one item")
+    ib.add_argument("rest", nargs="*", help="for add, the files; for show, the item's name")
+    ib.add_argument("--inbox", default=os.environ.get("KB_INBOX", "work/inbox"), help="the inbox folder")
+    ib.add_argument("--note", help="a few words kept with what you add"); ib.add_argument("--text", help="add these words")
+    ib.add_argument("--today"); ib.add_argument("--json", action="store_true")
     so = sub.add_parser("scout", help="read saved sources against your picture")
     so.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
     so.add_argument("--ledger", default=os.environ.get("KB_SCOUT", "work/scout.jsonl"))
@@ -246,11 +258,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
-    if a.cmd in ("picture", "models", "scout", "serve", "agents"):
+    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox"):
         from .models import ModelError, Refused
         try:
             return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve,
-                    "agents": _agents}[a.cmd](a, dump)
+                    "agents": _agents, "inbox": _inbox}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
@@ -660,7 +672,7 @@ def _serve(a, dump) -> int:
     import shutil
 
     from .picture import serve
-    kb = serve.Kb(a.runlog, a.lessons, a.port, a.lang)
+    kb = serve.Kb(a.runlog, a.lessons, a.port, a.lang, inbox=a.inbox)
     try:
         srv = serve.make(kb)
     except OSError as e:
@@ -688,6 +700,57 @@ def _serve(a, dump) -> int:
         print("\nStopped.")
     finally:
         srv.server_close()
+    return 0
+
+
+def _inbox(a, dump) -> int:
+    from datetime import date
+    from pathlib import Path
+
+    from .picture import inbox as inb
+    box = inb.Inbox(a.inbox)
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    if a.action == "add":
+        if not a.rest and a.text is None:
+            raise KeyError("say what to add: kb inbox add and the files' paths, or --text and the words in quotes.")
+        paths = [Path(x).expanduser() for x in a.rest]
+        for p in paths:                                        # check them all before keeping any
+            if p.is_dir():
+                raise KeyError(f"{p} is a folder. Name the files in it.")
+            if not p.is_file():
+                raise KeyError(f"there is no file at {p}.")
+            if p.stat().st_size > inb.MAX_FILE:
+                raise KeyError(f"{p.name} is over {inb.MAX_FILE // (1024 * 1024)} MB, so kb cannot keep it.")
+        out = [box.add_text(a.text, a.note, today)] if a.text is not None else []
+        out += [box.add(p.read_bytes(), p.name, a.note, today) for p in paths]
+        if a.json:
+            dump(out)
+            return 0
+        for x in out:
+            print(f"{'kept' if x['new'] else 'already here'}: {x['id']}  {x['kind']}  "
+                  f"{x['name'] or x['preview'][:60]}  ({inb.say(x)})")
+        if any(x.get("text_file") for x in out):
+            print(f"\nTo look for chances in what kb read, against your picture:\n  kb scout read {Path(a.inbox) / 'text'}")
+        return 0
+    if a.action == "show":
+        if len(a.rest) != 1:
+            raise KeyError("name one item: kb inbox show and the item's name from the list kb inbox prints.")
+        item = box.get(a.rest[0])
+        text = box.text(item)
+        if a.json:
+            dump({**item, "text": text})
+            return 0
+        print(f"{item['id']}: a {item['kind']}{' called ' + item['name'] if item['name'] else ''}, "
+              f"{item['size']:,} bytes, received {item['received']} from the {item['via']}.")
+        print(f"Kept at {Path(a.inbox) / item['file']}. {inb.say(item).capitalize()}"
+              + (f" ({item['why']})" if item.get("why") else "") + ".")
+        for n in item.get("notes", []):
+            print(f"Note, {n['on']}: {n['text']}")
+        if text:
+            print("\n" + text, end="" if text.endswith("\n") else "\n")
+        return 0
+    items = box.items()
+    dump(items) if a.json else print(inb.list_md(items, a.inbox), end="")
     return 0
 
 

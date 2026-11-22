@@ -582,6 +582,34 @@ kb serve also refuses requests that name another host (a web page cannot reach i
 changes only as JSON with its own header (a page from another site cannot send them), and tells the browser to keep
 nothing and load nothing from outside. When Tailscale says who opened the page, the list shows it.
 
+#### Your inbox
+
+The first box on the phone page is an inbox. Paste a post or a link into it, attach screenshots, PDFs, Word or
+PowerPoint files and voice notes from the phone, or press **Record a voice note** and speak. **Send to kb** puts each
+one in `work/inbox` on the laptop. A few words sent with files become their note; a longer text, or a link, is kept
+as an item of its own. On the laptop you can drag files onto the box, or use the command line:
+
+```bash
+kb inbox                                   # everything you sent, newest first
+kb inbox add ~/Downloads/call.pdf --note "for the bakery"
+kb inbox show in_3f2a9c0d1b7e              # one item, with the text kb read from it
+```
+
+kb knows each file by its content, never by its name, and never opens or runs it. It reads what it can on the
+laptop, at once: text and posts as they are, the text layer of a PDF page by page, and the words of a .docx or
+.pptx file. A link is kept as text; kb never opens a link on its own. Screenshots, scanned PDFs and voice notes are
+kept whole and marked as waiting for an image or speech reader that runs on the laptop; none is built in yet.
+Nothing is overwritten: the same file sent twice is kept once, and a second note on it goes beside the first.
+
+What kb read goes into `work/inbox/text`, one file per item, so the scout can look for chances in it:
+
+```bash
+kb scout read work/inbox/text
+```
+
+A send can be up to 20 MB a file. Nothing in the inbox leaves the laptop, unless you run the scout with a model you
+`--allow` for that run.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:
@@ -673,6 +701,9 @@ writer. `--json` gives the register and the findings as data.
   `breeding/candidates.md`, and it must earn its place with a score.
 - `kb serve` serves while its terminal is open; it is not a background service. The phone reaches it only while the
   laptop is on and awake. Its safety rests on staying on `127.0.0.1`, with Tailscale as the only way in.
+- The inbox reads text, links, PDFs with a text layer, and .docx and .pptx files. It does not yet read screenshots,
+  scans or voice: those wait, kept whole, for a reader that runs on the laptop. It does not read .doc, .xls or
+  .xlsx files, and a share from another app needs the page open (there is no share button into kb yet).
 - No accuracy number is claimed for this repo yet. `breeding/scores.jsonl` will hold them as they are measured.
 
 ## Credits and licence
