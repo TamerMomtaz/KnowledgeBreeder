@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
+from .. import theme
 from ..runlog import RunLog, query
 from . import lessons as les
 from . import page, rating
@@ -177,7 +178,8 @@ b.addEventListener("click", function(){
 """
 
 
-def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60) -> str:
+def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
+          today: date | None = None) -> str:
     """The first page: every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -201,13 +203,14 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     lesson_html = ('<ol class="lessons">' + "".join(f'<li><bdi>{_e(x)}</bdi></li>' for x in lessons) + "</ol>"
                    if lessons else f'<p class="soft">{_e(_t(lang, "no_lessons"))}</p>')
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
+    hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     blob = json.dumps({k: LABELS[lang][k] for k in ("add", "saving", "not_saved")}, ensure_ascii=False).replace("<", "\\u003c")
-    return (f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
+    return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">'
             f'<title>{_e(_t(lang, "title"))}</title><style>{INDEX_CSS}</style></head><body><div class="wrap">'
-            f'<div class="top"><h1>{_e(_t(lang, "title"))}</h1><a href="/?lang={LABELS[lang]["other_lang"]}" '
+            f'<header><div class="top"><h1>{_e(_t(lang, "title"))}</h1><a href="/?lang={LABELS[lang]["other_lang"]}" '
             f'lang="{LABELS[lang]["other_lang"]}">{_e(LABELS[lang]["other"])}</a></div>'
-            f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}'
+            f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}{hud}</header>'
             f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
             f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
             f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -275,7 +278,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/":
                 log = self.kb.log()
                 try:
-                    body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"))
+                    body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
+                                 today=self.kb.today)
                 finally:
                     if log:
                         log.close()
@@ -289,9 +293,10 @@ class Handler(BaseHTTPRequestHandler):
                     run_id = log.get(m.group(1)).id
                     data = page.gather(log, run_id)
                     hist = page.history(log)
+                    record = theme.standing(page.history(log, limit=1_000_000), self.kb.today)
                 finally:
                     log.close()
-                return self._send(200, page.build(data, hist, lang=lang, today=self.kb.today, live=True))
+                return self._send(200, page.build(data, hist, lang=lang, today=self.kb.today, live=True, record=record))
             if path == "/favicon.ico":
                 self.send_response(204)
                 self.end_headers()

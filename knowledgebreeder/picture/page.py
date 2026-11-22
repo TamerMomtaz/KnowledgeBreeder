@@ -25,6 +25,7 @@ from datetime import date
 from importlib import resources
 from pathlib import Path
 
+from .. import theme
 from ..runlog import RunLog, query
 from . import private, trail
 
@@ -333,7 +334,7 @@ def _trail(data: dict, lang: str) -> str:
             f'<p class="cmds"><code dir="ltr">{_e(cmd)}</code> <code dir="ltr">{_e(cmd)} --json</code></p></details>')
 
 
-def _who(a: dict, lang: str, hue: int) -> str:
+def _who(a: dict, lang: str, hue: int, st: dict | None = None) -> str:
     bits = [f"<bdi>{_e(a['model'])}</bdi>"] if a["model"] else []
     if a["where"]:
         bits.append(_e(_t(lang, a["where"])))
@@ -354,14 +355,15 @@ def _who(a: dict, lang: str, hue: int) -> str:
     if a["cost"]:
         bits.append(f"<bdi>${a['cost']:.4f}</bdi>")
     notes = "".join(f'<p class="warn">{_e(_t(lang, "note", w=w))}</p>' for w in a.get("warnings", []))
-    return f'<li>{_tag(a["worker"], hue, a["model"])} <span class="meta">{" · ".join(bits)}</span>{notes}</li>'
+    return (f'<li>{_tag(a["worker"], hue, a["model"])}{theme.seal(a["worker"], st, lang)} '
+            f'<span class="meta">{" · ".join(bits)}</span>{notes}</li>')
 
 
-def _history(rows: list[dict], workers: list[str], hues: dict[str, int], lang: str) -> str:
+def _history(rows: list[dict], workers: list[str], hues: dict[str, int], lang: str, st: dict | None = None) -> str:
     if not rows:
         return f'<p class="soft">{_e(_t(lang, "history_few"))}</p>'
     names = list(dict.fromkeys(workers + [w for r in rows for w in r["workers"]]))
-    head = "".join(f"<th>{_tag(w, hues.get(w, 0))}</th>" for w in names)
+    head = "".join(f"<th>{_tag(w, hues.get(w, 0))}{theme.seal(w, st, lang)}</th>" for w in names)
     body = []
     for r in reversed(rows):
         cells = []
@@ -384,14 +386,16 @@ def _history(rows: list[dict], workers: list[str], hues: dict[str, int], lang: s
     few = f'<p class="soft">{_e(_t(lang, "history_few"))}</p>' if len(rows) < 3 else ""
     return (f'<div class="scroll"><table class="hist"><thead><tr><th>{_e(_t(lang, "date"))}</th><th class="rid">{_e(_t(lang, "run"))}</th>'
             f'{head}</tr></thead><tbody>{"".join(body)}</tbody><tfoot><tr><td>{_e(_t(lang, "mean"))}</td><td class="rid"></td>'
-            f'{"".join(means)}</tr></tfoot></table></div>{few}')
+            f'{"".join(means)}</tr></tfoot></table></div>{few}{theme.ranks_note(lang) if st else ""}')
 
 
 def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag: str | None = None,
-          today: date | None = None, live: bool = False) -> str:
+          today: date | None = None, live: bool = False, record: dict | None = None) -> str:
     """The whole page as one string. ``log_flag`` is the run log's path when the commands must name it.
-    ``live`` is for kb serve: Save buttons send your ticks to kb on this machine instead of writing commands."""
+    ``live`` is for kb serve: Save buttons send your ticks to kb on this machine instead of writing commands.
+    ``record`` is your standing over every rated run (theme.standing); without it, the runs in ``hist`` count."""
     lang = lang if lang in LABELS else "en"
+    st = record or theme.standing(hist or [], today)
     out_box = (f'<div class="cmd live" hidden><span class="say" dir="auto"></span>'
                f'<button type="button" class="save">{_e(_t(lang, "save"))}</button></div>' if live else
                f'<div class="cmd" hidden><code dir="ltr"></code><button type="button" class="copy">{_e(_t(lang, "copy"))}</button></div>')
@@ -460,20 +464,21 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
                          m=", ".join(workers) or "-")),
         "__SIGN__": _e(_t(lang, "sign")), "__ORDER__": _e(_t(lang, "order")),
         "__WHO_H__": _e(_t(lang, "who_h")),
-        "__WHO__": "".join(_who(a, lang, hues[a["worker"]]) for a in answers),
+        "__WHO__": "".join(_who(a, lang, hues[a["worker"]], st) for a in answers),
         "__LESSONS_H__": _e(_t(lang, "lessons_h")) + f" ({len(data['lessons'])})", "__RECORD_H__": _e(_t(lang, "record_h")),
         "__RECORD_NOTE__": _e(_t(lang, "record_note_live" if live else "record_note")), "__HISTORY_H__": _e(_t(lang, "history_h")),
         "__HISTORY_NOTE__": _e(_t(lang, "history_note")), "__EMPTY__": _e(_t(lang, "empty")),
         "__PRIVATE__": _e(_t(lang, "private")), "__MADE__": _e(_t(lang, "made", d=today.isoformat())),
     }
     fill |= {"<!--__PIECES__-->": "".join(parts), "<!--__LESSONS__-->": lessons, "<!--__RATE__-->": "".join(rate),
-             "<!--__PICK__-->": pick, "<!--__HISTORY__-->": _history(hist or [], workers, hues, lang),
+             "<!--__PICK__-->": pick, "<!--__HISTORY__-->": _history(hist or [], workers, hues, lang, st),
+             "<!--__HUD__-->": theme.hud(st, lang),
              "<!--__TRAIL__-->": _trail(data, lang),
              "/*__DATA__*/": blob}
     fill["<!--__BACK__-->"] = (f'<p class="back"><a href="/?lang={lang}">{_e(_t(lang, "back"))}</a></p>' if live else "")
     if live:                                    # the Save buttons talk to kb on the machine that served the page
         page = page.replace("default-src 'none';", "default-src 'none'; connect-src 'self';", 1)
-    return re.sub(r"<!--__[A-Z]+__-->|/\*__DATA__\*/|__[A-Z_]+__", lambda m: fill.get(m.group(0), m.group(0)), page)
+    return theme.inject(re.sub(r"<!--__[A-Z]+__-->|/\*__DATA__\*/|__[A-Z_]+__", lambda m: fill.get(m.group(0), m.group(0)), page))
 
 
 def write(path: str | Path, page: str) -> Path:
