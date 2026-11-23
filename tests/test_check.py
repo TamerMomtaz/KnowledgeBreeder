@@ -81,6 +81,38 @@ area: Shop
     assert "one area written 3 ways" in md
 
 
+def test_a_card_that_links_to_the_other_says_they_are_two_works():
+    text = """### PROJECT CARD
+name: Bakery
+one_line: The shop.
+area: Food
+last_activity: 2026-11-20
+source: my notes
+LINKS TO MY OTHER WORK: Bakery van | how the bread reaches the town
+
+### PROJECT CARD
+name: Bakery van
+one_line: The van.
+area: Food
+last_activity: 2026-11-20
+source: my notes
+
+### PROJECT CARD
+name: Bakery cards
+one_line: Recipe cards.
+area: Food
+last_activity: 2026-11-20
+source: my notes
+"""
+    p = Picture()
+    p.add(cards.parse(text, "t.md"))
+    pairs = {(a, b): why for a, b, why in check.same_names(p)}
+    assert pairs == {("bakery", "bakery-cards"): "one name holds the other"}       # no link, still asked about
+    r = check.cards(p)
+    assert not any("same project" in g for g in r["bakery-van"]["gaps"])
+    assert "it may be the same project as Bakery cards" in r["bakery"]["gaps"]
+
+
 def two_pieces(model, system, user):
     oud, driver = _eid(user, "record one piece a month"), _eid(user, "a delivery driver")
     return json.dumps({"advice": [
