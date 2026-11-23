@@ -111,6 +111,8 @@ class Picture:
             if fingerprint:
                 c["fingerprint"] = fingerprint
             old = self.cards.get(c["id"])
+            if old is None:
+                old = self._renamed(c)
             if old is not None and same(old, c):
                 unchanged.append(c["name"])
                 for k in ("origin", "fingerprint"):            # where it was read last; when it was learned stays
@@ -123,6 +125,16 @@ class Picture:
             self.cards[c["id"]] = c
         self._index = None
         return {"added": added, "updated": updated, "unchanged": unchanged}
+
+    def _renamed(self, c: dict) -> dict | None:
+        """A card whose ``formerly:`` line names a card the picture holds takes that card's place. The card under its
+        old name becomes its newest older version, with the history it had, so nothing is lost in a rename."""
+        for former in c.get("formerly", []):
+            fid = cardmod.slug(former)
+            if fid != c["id"] and fid in self.cards:
+                self.history[c["id"]] = self.history.pop(fid, []) + self.history.pop(c["id"], [])
+                return self.cards.pop(fid)
+        return None
 
     def add_area(self, name: str) -> bool:
         if name.strip() and name.strip().lower() not in {a.lower() for a in self.all_areas()}:

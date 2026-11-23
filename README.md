@@ -254,6 +254,10 @@ When you add a card that the picture already holds, and it now says something el
 current card and the older one is kept, with the day kb learned it and a fingerprint of the file it came from. The
 same card added again changes nothing. `kb picture add` says, for each card that changed, what left it.
 
+To rename a project, give its card the new name and a `formerly:` line with the old one, such as
+`formerly: Bakery van`. The card under the old name becomes the renamed card's older version, with its history, so
+the picture holds one card and nothing is lost. Without that line, a new name is a new card.
+
 ```bash
 kb picture changes
 ```
