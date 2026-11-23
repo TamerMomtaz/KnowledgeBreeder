@@ -6,7 +6,8 @@ asks, of your own cards, and then lets your own ticks test the claim:
     1 current      does the card say when the project was last worked on?
     2 complete     how much of the card is filled in, not "unknown" or missing?
     3 provenance   does it say where its facts come from, and is that more than memory?
-    4 one name     is a project under two names, or a name that could be several cards?
+    4 one name     is a project under two names, or a name that could be several cards? (when one card links to
+                   the other, its card says they are two works, so the pair is not asked about)
     5 owner        does the card name who keeps its facts true? (owner: in the card's header, optional)
 
 A card with no gap is ready, with one gap thin, with two or more (or under a quarter filled in) weak. Ownership
@@ -60,8 +61,11 @@ def _source(c: dict) -> str:
 
 
 def same_names(pic: Picture) -> list[tuple[str, str, str]]:
-    """Pairs of cards that may be one project under two names: (id, id, why)."""
+    """Pairs of cards that may be one project under two names: (id, id, why). Two cards whose names are alike but
+    where one links to the other are left out: a Bakery card that links to Bakery van says they are two works. A name
+    that is also the other card's alias is always asked about, because kb cannot tell which card it means."""
     out = []
+    linked = {frozenset((ln["from"], t)) for ln in pic.links() for t in ln["to"]}
     ids = list(pic.cards)
     toks = {cid: set(words(pic.cards[cid]["name"])) for cid in ids}
     alias = {cid: {a.strip().lower() for a in pic.cards[cid].get("aliases", []) if a.strip()} for cid in ids}
@@ -71,6 +75,8 @@ def same_names(pic: Picture) -> list[tuple[str, str, str]]:
             ta, tb = toks[a], toks[b]
             if na in alias[b] or nb in alias[a] or alias[a] & alias[b]:
                 out.append((a, b, "a name of one is an alias of the other"))
+            elif frozenset((a, b)) in linked:
+                continue
             elif ta and tb and (ta <= tb or tb <= ta):
                 out.append((a, b, "one name holds the other"))
             elif ta and tb and len(ta & tb) / len(ta | tb) >= 0.6:
