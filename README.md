@@ -517,10 +517,12 @@ committed.
 
 #### The look, and your record
 
-Every page kb draws (this one, the list on your phone, the town and the plant walk) wears one look: a title card
-in a heavy ink frame, panels with hard shadows, gold for what you have earned and a red seal for what you decide.
-It follows your system's light or dark setting, uses only the fonts on your machine, and moves only if your system
-allows motion.
+Every page kb draws (this one, the list on your phone, the town and the plant walk) wears one look, drawn like a
+manga page: a title card with focus lines closing in on the title, panels in heavy ink frames with hard shadows,
+each panel's name in a narration box in its corner, your own notes in speech balloons, and the buttons that act as
+slanted plates. Gold is for what you have earned and the red seal for what you decide. It follows your system's
+light or dark setting, uses only the fonts on your machine, and moves only if your system allows motion. On a
+laptop the list is two columns like this page: the inbox in the wide one, runs and lessons beside it.
 
 The advice page and the list on your phone carry a small record in the title card. It counts only what you did:
 
