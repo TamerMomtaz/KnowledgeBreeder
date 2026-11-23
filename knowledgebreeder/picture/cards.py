@@ -15,7 +15,9 @@ from __future__ import annotations
 import re
 from datetime import date
 
-HEADER = ("name", "one_line", "area", "kind", "last_activity", "source", "owner", "aliases")
+HEADER = ("name", "one_line", "area", "kind", "last_activity", "source", "owner", "aliases", "formerly")
+# Header lines that hold several names, and what splits them. A former name often holds a comma, so only ; splits it.
+NAME_LISTS = {"aliases": r"[;,]", "formerly": r";"}
 SECTIONS = ("PURPOSE", "WHAT EXISTS", "WHAT IT CAN DO", "WHAT IT NEEDS", "UNFINISHED", "IDEAS NOT STARTED",
             "REUSABLE PARTS", "LINKS TO MY OTHER WORK", "RECURRING THEMES", "OPEN DECISIONS",
             "WHAT YOU COULD NOT SEE")
@@ -103,8 +105,8 @@ def _inline_items(text: str) -> list[str]:
 
 
 def _new(origin: str) -> dict:
-    card = {h: "" for h in HEADER if h != "aliases"}
-    card.update({"aliases": [], "purpose": {}, "unknown": [], "notes": [], "origin": origin})
+    card = {h: "" for h in HEADER if h not in NAME_LISTS}
+    card.update({"aliases": [], "formerly": [], "purpose": {}, "unknown": [], "notes": [], "origin": origin})
     card.update({k: [] for k in LISTS})
     return card
 
@@ -185,8 +187,8 @@ def parse(text: str, origin: str = "") -> list[dict]:
             h, v = head.group(1).lower(), head.group(2).strip()
             if _HINT.match(v):
                 v = ""
-            if h == "aliases":
-                card["aliases"] = [x.strip() for x in re.split(r"[;,]", v) if x.strip()]
+            if h in NAME_LISTS:
+                card[h] = [x.strip() for x in re.split(NAME_LISTS[h], v) if x.strip()]
             else:
                 card[h] = v
             continue

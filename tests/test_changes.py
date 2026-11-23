@@ -95,6 +95,31 @@ def test_a_newer_card_keeps_the_older_one_and_says_what_left(tmp_path, capsys):
     assert left[0]["source"] == ["Corner bakery · older version"]
 
 
+def test_a_renamed_card_takes_the_old_ones_place_and_keeps_its_history(tmp_path, capsys):
+    _add(tmp_path, capsys, MAY, "2026-05-03")
+    pic, _ = _add(tmp_path, capsys, NOVEMBER, "2026-11-12")
+    renamed = NOVEMBER.replace("name: Corner bakery\n", "name: Town bakery\nformerly: Corner bakery\n")
+    pic, out = _add(tmp_path, capsys, renamed, "2026-11-20", "renamed.md")
+    assert out["updated"] == ["Town bakery"] and not out["added"] and out["cards"] == 1
+    assert out["changed"]["Town bakery"] == "name Corner bakery → Town bakery"
+    p = Picture.load(pic)
+    assert list(p.cards) == ["town-bakery"] and "corner-bakery" not in p.history
+    assert [v["name"] for v in changes.versions(p, "town-bakery")] == ["Corner bakery", "Corner bakery", "Town bakery"]
+    assert p.cards["town-bakery"]["formerly"] == ["Corner bakery"]
+    _, again = _add(tmp_path, capsys, renamed, "2026-11-21", "renamed.md")
+    assert again["unchanged"] == ["Town bakery"]                                  # the same card again changes nothing
+    _, plain = _add(tmp_path, capsys, MAY.replace("Corner bakery", "Hill bakery"), "2026-11-22", "hill.md")
+    assert plain["added"] == ["Hill bakery"]                                      # no formerly: line, a new card
+    _, comma = _add(tmp_path, capsys, renamed.replace("name: Town bakery\nformerly: Corner bakery",
+                                                     "name: Town bakery, on the square\nformerly: Town bakery"),
+                    "2026-11-23", "comma.md")
+    assert comma["updated"] == ["Town bakery, on the square"] and comma["cards"] == 2   # a name may hold a comma
+    back = renamed.replace("name: Town bakery\nformerly: Corner bakery",
+                           "name: Town bakery again\nformerly: Town bakery, on the square; Corner bakery")
+    _, two = _add(tmp_path, capsys, back, "2026-11-24", "back.md")
+    assert two["updated"] == ["Town bakery again"] and two["cards"] == 2
+
+
 def test_what_left_reaches_the_advice_and_the_private_list_still_holds(tmp_path, capsys):
     _add(tmp_path, capsys, MAY.replace("for the school", "for Hana's school"), "2026-05-03")
     pic, _ = _add(tmp_path, capsys, NOVEMBER, "2026-11-12")

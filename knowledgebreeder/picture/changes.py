@@ -29,7 +29,7 @@ WATCH = (("ideas", "IDEAS NOT STARTED", "idea"), ("needs", "WHAT IT NEEDS", "nee
          ("can_do", "WHAT IT CAN DO", "capability"), ("exists", "WHAT EXISTS", "thing made"),
          ("parts", "REUSABLE PARTS", "reusable part"), ("links", "LINKS TO MY OTHER WORK", "link"))
 MISSES = ("ideas", "needs", "unfinished", "decisions")    # what may be a missed chance when it leaves a card
-HEAD = ("kind", "last_activity", "area", "one_line")
+HEAD = ("name", "kind", "last_activity", "area", "one_line")
 SAME = 0.6                                                # share of words two items hold in common to count as one
 NOT_KNOWN = "before kb kept versions"
 
