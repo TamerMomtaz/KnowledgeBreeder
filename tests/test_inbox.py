@@ -150,6 +150,8 @@ def test_the_phone_page_sends_posts_files_and_voice_notes_to_the_laptop(phone, t
     assert code == 200 and 'id="inbox"' in doc and "Your inbox (0)" in doc and 'id="send"' in doc and 'id="rec"' in doc
     assert doc.count("<script") == 2 and not re.search(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", doc)
     assert ask(kb, "GET", "/?lang=ar")[2].count('dir="rtl"') == 1
+    wide = doc.index('<div class="main">'), doc.index('id="inbox"'), doc.index('<div class="side">'), doc.index('id="lesson"')
+    assert list(wide) == sorted(wide)                                   # the inbox in the wide column, runs and lessons beside it
 
     code, _, said = ask(kb, "POST", "/api/inbox", {"text": "A post about a tender for AI pilots"}, o)
     assert code == 200 and json.loads(said)["kind"] == "text" and json.loads(said)["new"]

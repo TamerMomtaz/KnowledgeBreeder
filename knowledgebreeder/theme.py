@@ -19,7 +19,7 @@ CSS = r"""
 :root{
   --bg:#e4e3de; --ink:#17181f; --soft:#565866; --line:#17181f2e; --card:#f4f3ef; --on:#f5dcd6; --warn:#8f5200;
   --accent:#2f6b6d; --accent-ink:#ffffff; --tied:#b8282e; --seal:#b8282e; --seal-ink:#ffffff; --gold:#7a5c22;
-  --frame:#17181f; --drop:#17181f; --tone:#17181f; --shadow:4px 4px 0 var(--drop);
+  --frame:#17181f; --drop:#17181f; --tone:#17181f; --speed:#17181f30; --shadow:4px 4px 0 var(--drop);
   --wall-l:#dcdad3; --wall-r:#c9c6bd; --win:#a9a69c; --lit:#c48a1a; --edge:#17181f; --plate-l:86%; --roof-s:34%;
   --roof-l:56%; --slab-l:72%; --lane:#17181f14; --pipe:#2f6b6d; --fill:#dddbd4; --tint:#d5e3e3; --bad:#b3261e;
   --display:"Bahnschrift","Avenir Next Condensed","Roboto Condensed","Arial Narrow","DejaVu Sans Condensed","Noto Sans",system-ui,sans-serif;
@@ -30,7 +30,7 @@ CSS = r"""
   :root{
     --bg:#141722; --ink:#ece6d6; --soft:#a3a5b4; --line:#ece6d624; --card:#1d2130; --on:#3b1f27; --warn:#e8b04a;
     --accent:#6fb3b3; --accent-ink:#0c1416; --tied:#e2474d; --seal:#e2474d; --seal-ink:#140c0e; --gold:#d2b06e;
-    --frame:#d9d1bd; --drop:#05060a; --tone:#ece6d6; --shadow:5px 5px 0 var(--drop);
+    --frame:#d9d1bd; --drop:#05060a; --tone:#ece6d6; --speed:#ece6d62c; --shadow:5px 5px 0 var(--drop);
     --wall-l:#2c3245; --wall-r:#232838; --win:#151826; --lit:#d2b06e; --edge:#05060a; --plate-l:17%; --roof-s:35%;
     --roof-l:45%; --slab-l:12%; --lane:#ffffff10; --pipe:#6fb3b3; --fill:#262b3d; --tint:#1f3640; --bad:#ff6b6b;
   }
@@ -42,8 +42,12 @@ a{color:var(--accent)}
 
 /* the title card */
 header{position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:24px;
-  align-items:center;background:var(--card);border:2px solid var(--frame);box-shadow:var(--shadow);
-  padding:20px 22px 26px;margin:4px 0 22px;overflow:hidden}
+  align-items:center;border:2px solid var(--frame);box-shadow:var(--shadow);
+  padding:20px 22px 26px;margin:4px 0 22px;overflow:hidden;--at:22% 42%;
+  background:radial-gradient(ellipse 40% 56% at var(--at),var(--card) 46%,transparent 100%),
+    repeating-conic-gradient(from 1deg at var(--at),var(--speed) 0 .35deg,transparent .35deg 2.3deg),
+    repeating-conic-gradient(from 0deg at var(--at),var(--speed) 0 .9deg,transparent .9deg 6.7deg),var(--card)}
+[dir=rtl] header{--at:78% 42%}
 header>*{grid-column:1;min-width:0}
 header::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.2;
   background-image:radial-gradient(circle,var(--tone) 1.05px,transparent 1.35px);background-size:7px 7px;
@@ -53,7 +57,7 @@ header::after{content:"";position:absolute;inset-inline-start:0;bottom:0;width:m
   transform-origin:left center}
 [dir=rtl] header::after{transform-origin:right center}
 header h1,.top h1{font-family:var(--display);font-stretch:condensed;font-weight:800;font-size:clamp(2rem,6.4vw,3.5rem);
-  line-height:.98;letter-spacing:-.015em;margin:0 0 8px}
+  line-height:.98;letter-spacing:-.015em;margin:0 0 8px;text-shadow:.045em .045em 0 var(--seal)}
 [lang="ar"] header h1,[lang="ar"] .top h1{font-family:var(--kufi);font-size:clamp(1.7rem,5.4vw,2.8rem);line-height:1.2;letter-spacing:0}
 header p{color:var(--soft)}
 [lang="en"] header>p:not(.back):not(.sign),[lang="en"] header>.sub{font-family:var(--serif);font-style:italic;font-size:1.06rem}
@@ -86,10 +90,23 @@ header{container-type:inline-size}
 .piece.on{background:var(--on)}
 section.group{border:2px dashed var(--soft);border-radius:3px}
 h2,.district h2,.panel h2{font-family:var(--display);font-stretch:condensed;font-weight:800;letter-spacing:.005em}
+.box>h2:first-child{width:fit-content;max-width:calc(100% + 16px);margin-block:-14px 12px;margin-inline:-16px 0;
+  padding:6px 30px 7px 16px;background:var(--frame);color:var(--card);font-size:1.08rem;line-height:1.25;
+  clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+[dir=rtl] .box>h2:first-child{padding:6px 16px 7px 30px;clip-path:polygon(0 0,100% 0,100% 100%,14px 100%)}
 [lang="ar"] h2,[lang="ar"] .district h2,[lang="ar"] .panel h2{font-family:var(--kufi);letter-spacing:0}
 .move{font-size:1.12rem}
 [lang="en"] .why,[lang="en"] .said span{font-family:var(--serif);font-style:italic}
 .kind,.panel h3{text-transform:none;letter-spacing:0}
+.inbox .note{position:relative;justify-self:start;width:fit-content;max-width:100%;margin:8px 0 4px;padding:5px 14px;
+  background:var(--bg);border:1.5px solid var(--frame);border-radius:16px}
+.inbox .note::before{content:"";position:absolute;inset-inline-start:18px;top:-6.5px;width:10px;height:10px;background:var(--bg);
+  border-top:1.5px solid var(--frame);border-inline-start:1.5px solid var(--frame);transform:rotate(45deg)}
+[dir=rtl] .inbox .note::before{transform:rotate(-45deg)}
+.inbox .kind{align-self:start;justify-self:start;padding:1px 8px;border:1.5px solid var(--frame);font-family:var(--display);
+  font-stretch:condensed;font-size:.86rem;font-weight:800}
+[lang="ar"] .inbox .kind{font-family:var(--kufi);font-weight:700}
+.runs .date{font-family:var(--display);font-stretch:condensed;font-weight:800}
 .kind{border-radius:2px}
 .panel h3{font-size:.95rem;color:var(--soft)}
 .tag{border-radius:2px}
@@ -102,8 +119,16 @@ h2,.district h2,.panel h2{font-family:var(--display);font-stretch:condensed;font
 .tick input,.none input,.radio input,.keep input{accent-color:var(--seal)}
 .copy,.save,#add,#send,.btn[aria-pressed="true"],.chip[aria-pressed="true"],.pick.sel{
   background:var(--seal);border-color:var(--seal);color:var(--seal-ink)}
-.copy,.save,#add,#send{border-radius:3px;box-shadow:3px 3px 0 var(--drop)}
-.copy:active,.save:active,#add:active,#send:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--drop)}
+.copy,.save,#add,#send,#attach,#rec{position:relative;isolation:isolate;background:transparent;border:0;border-radius:0;
+  box-shadow:none;padding-inline:22px}
+.copy::before,.save::before,#add::before,#send::before,#attach::before,#rec::before{content:"";position:absolute;inset:0;z-index:-1;
+  background:var(--seal);box-shadow:4px 4px 0 var(--drop);transform:skewX(-14deg)}
+#attach::before,#rec::before{background:var(--card);border:1.5px solid var(--frame);box-shadow:3px 3px 0 var(--drop)}
+#rec[aria-pressed="true"]::before{background:var(--seal);border-color:var(--seal)}
+[dir=rtl] :is(.copy,.save,#add,#send,#attach,#rec)::before{transform:skewX(14deg)}
+:is(.copy,.save,#add,#send,#attach,#rec):focus-visible{outline-offset:7px}
+:is(.copy,.save,#add,#send,#attach,#rec):active:not(:disabled){transform:translate(2px,2px)}
+:is(.copy,.save,#add,#send,#attach,#rec):active:not(:disabled)::before{box-shadow:1px 1px 0 var(--drop)}
 .btn,.chip,.lang,.close,.bar select,.bar input,.pick,input.reason,.change-text,textarea{border-radius:3px}
 .btn,.chip,.lang,.close{border:1.5px solid var(--frame)}
 .tab[aria-selected="true"]{border-bottom-color:var(--seal)}

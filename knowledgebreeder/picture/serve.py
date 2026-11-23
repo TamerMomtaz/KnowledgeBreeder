@@ -159,7 +159,9 @@ INDEX_CSS = """
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Noto Naskh Arabic","Geeza Pro",Tahoma,sans-serif}
 button,textarea{font:inherit;color:inherit}
-.wrap{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 40px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:26px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr);gap:0}}
 h1{font-size:clamp(1.5rem,5vw,2rem);line-height:1.15;margin:0 0 4px}
 h2{font-size:1.15rem;margin:0 0 8px}
 p{margin:0 0 6px}
@@ -167,7 +169,7 @@ p{margin:0 0 6px}
 .small{font-size:.9rem}
 .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 .top a{color:var(--accent);white-space:nowrap}
-.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:14px 0}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 22px}
 .runs{list-style:none;margin:0;padding:0}
 .runs li{border-top:1px solid var(--line)}
 .runs li:first-child{border-top:0}
@@ -357,6 +359,19 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic")
+    runs_box = f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
+    lessons_box = (f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
+                   f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
+                   f'<textarea id="lesson" dir="auto" maxlength="600" placeholder="{_e(_t(lang, "lesson_ph"))}" '
+                   f'aria-label="{_e(_t(lang, "lesson_ph"))}"></textarea>'
+                   f'<div class="row"><button type="button" id="add">{_e(_t(lang, "add"))}</button>'
+                   f'<span id="say" role="status"></span></div></section>')
+    # Wide like the advice page: the inbox takes the wide column, runs and lessons the narrow one. On a phone it is one
+    # column, inbox first. Without an inbox the runs take the wide column.
+    if box is not None:
+        main, side = inbox_html(box, lang, got), runs_box + lessons_box
+    else:
+        main, side = runs_box, lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -365,13 +380,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
             f'<header><div class="top"><h1>{_e(_t(lang, "title"))}</h1><a href="/?lang={LABELS[lang]["other_lang"]}" '
             f'lang="{LABELS[lang]["other_lang"]}">{_e(LABELS[lang]["other"])}</a></div>'
             f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}{hud}</header>'
-            f'{inbox_html(box or [], lang, got) if box is not None else ""}'
-            f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
-            f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
-            f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
-            f'<textarea id="lesson" dir="auto" maxlength="600" placeholder="{_e(_t(lang, "lesson_ph"))}" '
-            f'aria-label="{_e(_t(lang, "lesson_ph"))}"></textarea>'
-            f'<div class="row"><button type="button" id="add">{_e(_t(lang, "add"))}</button><span id="say" role="status"></span></div></section>'
+            f'<div class="layout"><div class="main">{main}</div><div class="side">{side}</div></div>'
             f'<footer><p>{_e(_t(lang, "private"))}</p></footer></div>'
             f'<script id="data" type="application/json">{blob}</script><script>{INDEX_JS}</script></body></html>')
 
