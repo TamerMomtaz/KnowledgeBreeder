@@ -616,6 +616,19 @@ kb scout read work/inbox/text
 A send can be up to 20 MB a file. Nothing in the inbox leaves the laptop, unless you run the scout with a model you
 `--allow` for that run.
 
+#### Share to kb from any app
+
+On an Android phone, kb can sit in the Share menu of every app, beside WhatsApp and Gmail. Open kb's `.ts.net`
+address in Chrome once, open the menu (the three dots) and press **Add to Home screen** (or **Install app**). From
+then on, **Share** in any app lists **kb**: a post, a link, a screenshot, a PDF or a voice note opens kb's page with
+it already in the inbox box. Add a few words if you like and press **Send to kb**; nothing reaches the laptop before
+you press it.
+
+The phone keeps what you shared in its own cache until the page picks it up, then deletes it. kb's laptop side never
+reads a share by itself: a share that arrives before kb was opened on the phone is dropped, and the page asks you to
+share again, so no other site can put anything in your inbox. iPhones do not offer this to web apps yet; there,
+paste into the inbox box as before.
+
 #### Without a terminal
 
 The page has an **Ask kb** box, so the daily jobs need no commands:
