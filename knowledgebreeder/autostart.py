@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -71,6 +72,39 @@ def port_free(port: int) -> bool:
         s.close()
 
 
+def old_serves(proc: str | Path = "/proc") -> list[int]:
+    """kb serve processes of yours that are not this one: one left running in a terminal you can no longer find."""
+    found = []
+    me = {os.getpid(), os.getppid()}
+    for d in Path(proc).iterdir():
+        if not d.name.isdigit() or int(d.name) in me:
+            continue
+        try:
+            if d.stat().st_uid != os.getuid():
+                continue
+            args = [a for a in (d / "cmdline").read_bytes().decode("utf-8", "replace").split("\0") if a]
+        except OSError:
+            continue
+        kb = any(a == "kb" or a.endswith("/kb") or a == "knowledgebreeder.cli" for a in args)
+        if kb and "serve" in args and not {"--install", "--uninstall"} & set(args):
+            found.append(int(d.name))
+    return sorted(found)
+
+
+def stop_old(port: int, proc: str | Path = "/proc", kill=os.kill, wait: float = 5.0) -> list[int]:
+    """Stop a kb serve left running elsewhere, so the service can take its port. Returns the processes stopped."""
+    pids = old_serves(proc)
+    for pid in pids:
+        try:
+            kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    end = time.monotonic() + wait
+    while pids and not port_free(port) and time.monotonic() < end:
+        time.sleep(0.2)
+    return pids
+
+
 def _run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
 
@@ -93,14 +127,19 @@ def _ok(run: Runner, cmd: list[str], what: str) -> str:
 
 
 def install(args: list[str], port: int, workdir: str | Path | None = None, run: Runner | None = None,
-            python: str | None = None, check_port: bool = True) -> list[str]:
+            python: str | None = None, check_port: bool = True, stop=stop_old) -> list[str]:
     """Write the service file, start it now and at every login. Returns plain lines to print."""
     run = _need_systemctl(run)
+    said = []
     if check_port and not port_free(port):
         state = run(["systemctl", "--user", "is-active", NAME])
         if (state.stdout or "").strip() != "active":
-            raise KeyError(f"something is already using port {port}, most likely kb serve in a terminal window. "
-                           f"Press Ctrl+C in that window, then run this again.")
+            stopped = stop(port)                          # the kb serve in a window you can no longer find
+            if stopped:
+                said.append("Stopped the kb serve that was still running in another window.")
+            if not port_free(port):
+                raise KeyError(f"something else is using port {port}. Stop it with: fuser -k {port}/tcp "
+                               f"Then run this again.")
     workdir = Path(workdir or os.getcwd()).resolve()
     path = unit_dir() / NAME
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +159,7 @@ def install(args: list[str], port: int, workdir: str | Path | None = None, run: 
     if state != "active":
         raise KeyError(f"kb serve did not start (systemd says {state or 'nothing'}). See why with: "
                        f"journalctl --user -u {NAME} -n 30")
-    return ["kb now starts by itself every time you log in to this laptop. It is running now.",
+    return [*said, "kb now starts by itself every time you log in to this laptop. It is running now.",
             f"Open it here: http://127.0.0.1:{port}/ (and on the phone, the same .ts.net address as before).",
             "You no longer need a terminal for kb serve.",
             f"Its settings file: {path}",
