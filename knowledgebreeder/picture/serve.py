@@ -32,12 +32,13 @@ from urllib.parse import parse_qs, urlsplit
 
 from .. import theme
 from ..runlog import RunLog, query
+from . import actions, page, rating
 from . import inbox as inb
 from . import lessons as les
-from . import page, rating
 
 MAX_BODY = 64_000
 MAX_INBOX_BODY = 30_000_000          # up to ten files a send, each up to inbox.MAX_FILE, sent as base64
+MAX_CARDS_BODY = 4_000_000           # one cards file, as text
 SHORT_NOTE = 280                     # words sent with files and no longer than this are their note, not a post
 RUN = re.compile(r"^/run/(run_[0-9A-Za-z]{6,32})$")
 CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'self'; "
@@ -46,10 +47,10 @@ LOCAL = {"127.0.0.1", "localhost", "[::1]"}
 
 LABELS = {
     "en": {
-        "title": "Your advice runs",
+        "title": "Your kb",
         "sub": "Served by kb on this laptop. Only this laptop, and your own devices through Tailscale, can open it.",
         "via": "Opened as {who} through your tailnet.",
-        "runs_h": "Runs", "none": "No advice run yet. Make one on the laptop with: kb picture advise",
+        "runs_h": "Runs", "none": "No advice run yet. Press Ask for advice.",
         "rated": "rated {r} of {n}", "not_rated": "not rated yet", "picked": "picked {w}", "failed": "failed",
         "nobody": "no answer", "lessons_h": "Your lessons",
         "lessons_note": "Every advice run follows them. Add one in your own words; it counts from the next run.",
@@ -68,12 +69,35 @@ LABELS = {
         "inbox_more": "{n} items in all. On the laptop: kb inbox",
         "k_text": "text", "k_link": "link", "k_pdf": "PDF", "k_word": "Word", "k_slides": "slides",
         "k_image": "picture", "k_audio": "voice", "k_other": "file",
+        "ask_h": "Ask kb",
+        "ask_note": "Each button runs here on the laptop, with the models on this laptop only. You can leave the page "
+                    "while kb works.",
+        "ask_models": "Models on this laptop: {names}.", "ask_no_models": "No model on this laptop yet: {e}",
+        "ask_cards": "Your picture: {n} cards.", "ask_no_picture": "No cards yet. Add a cards file here.",
+        "b_advise": "Ask for advice", "b_scout": "Find chances in my inbox", "b_cards": "Add cards from a file",
+        "l_check": "Check my picture", "l_chances": "See chances ({n} open)",
+        "starting": "Starting…", "reading": "Reading the file…",
+        "j_advise": "kb is asking {who} for advice. It can take a few minutes.",
+        "j_scout": "kb is reading your inbox with {who}.",
+        "j_advice_done": "Advice is ready from {who}.",
+        "j_advice_some": "Advice is ready from {who}. No answer from {bad}: {e}",
+        "j_advice_none": "No model gave advice. {bad}: {e}",
+        "j_scout_done": "kb read your inbox. New: {n}. Chances: {c}. Not confirmed: {u}.",
+        "j_scout_nothing": "Nothing new in your inbox to read.", "j_scout_old": "Read before: {n}.",
+        "j_failed": "It did not work: {e}", "j_open_run": "Open the advice", "j_open_chances": "See chances",
+        "busy": "kb is busy with another job. Wait for it to finish, then press again.",
+        "no_inbox_text": "Your inbox has nothing kb can read yet. Send a post, a link or a file first.",
+        "cards_done": "New cards: {a}. Updated: {u}. Unchanged: {s}. Cards in your picture now: {n}.",
+        "cards_none": "No PROJECT CARD in {name}, so nothing was added.", "cards_changed": "What changed:",
+        "check_title": "Is your picture ready?", "chances_title": "Chances from your inbox",
+        "back": "Back to kb", "en_only": "This page is in English for now.",
+        "no_chances_yet": "kb has not read your inbox yet. Press Find chances in my inbox on the first page.",
     },
     "ar": {
-        "title": "تشغيلات النصائح",
+        "title": "kb الخاص بك",
         "sub": "يعرضها kb من هذا اللابتوب. لا يفتحها إلا هذا اللابتوب وأجهزتك أنت عبر Tailscale.",
         "via": "فُتحت باسم {who} عبر شبكتك الخاصة.",
-        "runs_h": "التشغيلات", "none": "لا يوجد تشغيل نصائح بعد. أنشئ واحدًا على اللابتوب بالأمر: kb picture advise",
+        "runs_h": "التشغيلات", "none": "لا يوجد تشغيل نصائح بعد. اضغط اطلب نصيحة.",
         "rated": "التقييم: {r} من {n}", "not_rated": "لم يُقيَّم بعد", "picked": "الاختيار: {w}", "failed": "فشل",
         "nobody": "لا إجابة", "lessons_h": "دروسك",
         "lessons_note": "كل تشغيل نصائح يتبعها. أضف درسًا بكلماتك، ويُحسب من التشغيل التالي.",
@@ -92,6 +116,28 @@ LABELS = {
         "inbox_more": "عدد العناصر كلها: {n}. على اللابتوب: kb inbox",
         "k_text": "نص", "k_link": "رابط", "k_pdf": "PDF", "k_word": "Word", "k_slides": "شرائح",
         "k_image": "صورة", "k_audio": "صوت", "k_other": "ملف",
+        "ask_h": "اسأل kb",
+        "ask_note": "كل زر يعمل هنا على اللابتوب، بنماذج هذا اللابتوب فقط. يمكنك ترك الصفحة أثناء عمل kb.",
+        "ask_models": "النماذج على هذا اللابتوب: {names}.", "ask_no_models": "لا نموذج على هذا اللابتوب بعد: {e}",
+        "ask_cards": "صورتك: {n} بطاقة.", "ask_no_picture": "لا بطاقات بعد. أضف ملف بطاقات من هنا.",
+        "b_advise": "اطلب نصيحة", "b_scout": "ابحث عن فرص في صندوقي", "b_cards": "أضف بطاقات من ملف",
+        "l_check": "افحص صورتي", "l_chances": "الفرص (المفتوحة: {n})",
+        "starting": "جارٍ البدء…", "reading": "جارٍ قراءة الملف…",
+        "j_advise": "يطلب kb النصيحة من {who}. قد يستغرق ذلك بضع دقائق.",
+        "j_scout": "يقرأ kb صندوقك بواسطة {who}.",
+        "j_advice_done": "النصيحة جاهزة من {who}.",
+        "j_advice_some": "النصيحة جاهزة من {who}. لا إجابة من {bad}: {e}",
+        "j_advice_none": "لم يقدّم أي نموذج نصيحة. {bad}: {e}",
+        "j_scout_done": "قرأ kb صندوقك: الجديد {n}، والفرص {c}، وغير المؤكد {u}.",
+        "j_scout_nothing": "لا جديد في صندوقك للقراءة.", "j_scout_old": "قُرئ من قبل: {n}.",
+        "j_failed": "لم ينجح: {e}", "j_open_run": "افتح النصيحة", "j_open_chances": "اعرض الفرص",
+        "busy": "kb مشغول بمهمة أخرى. انتظر حتى تنتهي، ثم اضغط مرة أخرى.",
+        "no_inbox_text": "لا شيء في صندوقك يستطيع kb قراءته بعد. أرسل منشورًا أو رابطًا أو ملفًا أولًا.",
+        "cards_done": "بطاقات جديدة: {a}. حُدّثت: {u}. بلا تغيير: {s}. في صورتك الآن: {n}.",
+        "cards_none": "لا توجد PROJECT CARD في {name}، فلم يُضف شيء.", "cards_changed": "ما الذي تغيّر:",
+        "check_title": "هل صورتك جاهزة؟", "chances_title": "الفرص من صندوقك",
+        "back": "عودة إلى kb", "en_only": "هذه الصفحة بالإنجليزية حاليًا.",
+        "no_chances_yet": "لم يقرأ kb صندوقك بعد. اضغط «ابحث عن فرص في صندوقي» في الصفحة الأولى.",
     },
 }
 
@@ -203,6 +249,18 @@ button:disabled{opacity:.6;cursor:default}
 .drop{outline:2px dashed var(--accent);outline-offset:4px}
 footer{color:var(--soft);font-size:.86rem;margin-top:20px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.acts{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:12px 0 4px}
+.acts button{width:100%}
+.links{display:flex;flex-wrap:wrap;gap:0 18px;margin-top:8px}
+.links a{color:var(--accent);font-weight:600;min-height:44px;display:inline-flex;align-items:center}
+#job{margin:10px 0 0;min-height:1.5em;overflow-wrap:anywhere}
+#job a{color:var(--accent);font-weight:600}
+#job .changed{display:block;color:var(--soft);font-size:.9rem;margin-top:4px}
+ol.md,ul.md{margin:6px 0 4px;padding-inline-start:24px}
+ol.md li,ul.md li{margin:0 0 12px;overflow-wrap:anywhere}
+.more{display:block;color:var(--soft);font-size:.92rem;margin-top:3px}
+.doc .box p{overflow-wrap:anywhere}
+.doc .wrap{max-width:900px}
 """
 
 INDEX_JS = """
@@ -220,6 +278,56 @@ b.addEventListener("click", function(){
     .then(function(x){ if (!x.ok) throw new Error(x.j.error || "?"); location.reload(); })
     .catch(function(e){ b.textContent = L.add; ready(); say.textContent = L.not_saved.replace("{e}", e.message); say.className = "err"; });
 });
+
+var ask = document.getElementById("ask");
+if (ask){
+  var jobLine = document.getElementById("job"), acts = ask.querySelectorAll("button[data-job]"),
+      cpick = document.getElementById("cards-pick"), cbtn = document.getElementById("cards");
+  var jobLock = function(on){
+    for (var i = 0; i < acts.length; i++) acts[i].disabled = on || acts[i].hasAttribute("data-off");
+    cbtn.disabled = on;
+  };
+  var jobShow = function(j){
+    jobLine.textContent = j.say || ""; jobLine.className = j.cls || "";
+    if (j.link){ var a = document.createElement("a"); a.href = j.link; a.textContent = j.link_text;
+      jobLine.appendChild(document.createTextNode(" ")); jobLine.appendChild(a); }
+    (j.changed || []).forEach(function(c){ var s = document.createElement("span"); s.className = "changed";
+      s.textContent = c; jobLine.appendChild(s); });
+  };
+  var jobCall = function(path, body){
+    return fetch(path, {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify(body)})
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.say || j.error || String(r.status)); return j; }); });
+  };
+  var jobPoll = function(){
+    fetch("/api/job?lang=" + L.lang).then(function(r){ return r.json(); }).then(function(j){
+      jobShow(j);
+      if (j.status === "running") setTimeout(jobPoll, 2500);
+      else location.replace("/?lang=" + L.lang + "#ask");    // the new run, chances and counts show; the sentence stays
+    }).catch(function(){ setTimeout(jobPoll, 5000); });
+  };
+  Array.prototype.forEach.call(acts, function(b){
+    b.addEventListener("click", function(){
+      jobLock(true); jobShow({say: L.starting});
+      jobCall("/api/" + b.getAttribute("data-job"), {lang: L.lang}).then(function(j){ jobShow(j); jobPoll(); })
+        .catch(function(e){ jobShow({say: e.message, cls: "err"}); jobLock(false); });
+    });
+  });
+  cbtn.addEventListener("click", function(){ cpick.click(); });
+  cpick.addEventListener("change", function(){
+    var f = cpick.files && cpick.files[0]; cpick.value = "";
+    if (!f) return;
+    jobLock(true); jobShow({say: L.reading});
+    var r = new FileReader();
+    r.onload = function(){
+      jobCall("/api/cards", {name: f.name, text: String(r.result), lang: L.lang})
+        .then(function(j){ jobShow(j); jobLock(false); })
+        .catch(function(e){ jobShow({say: e.message, cls: "err"}); jobLock(false); });
+    };
+    r.onerror = function(){ jobShow({say: String(r.error || "?"), cls: "err"}); jobLock(false); };
+    r.readAsText(f);
+  });
+  if (ask.getAttribute("data-running") === "1"){ jobLock(true); jobPoll(); }
+}
 
 var post = document.getElementById("post");
 if (!post) return;
@@ -332,8 +440,80 @@ def inbox_html(box: list[dict], lang: str, got: dict | None = None, show: int = 
             f'<span id="said" role="status"></span></div>{items}</section>')
 
 
+def job_say(state: dict, lang: str) -> dict:
+    """What the page says about the job running now or the last one, as one plain sentence and maybe a link."""
+    st, kind = state.get("status", "idle"), state.get("kind")
+    out = {"status": st, "kind": kind, "say": "", "cls": ""}
+    if st == "running":
+        out["say"] = _t(lang, "j_advise" if kind == "advise" else "j_scout", who=", ".join(state.get("models") or []))
+    elif st == "failed":
+        out.update(say=_t(lang, "j_failed", e=state.get("error") or "?"), cls="err")
+    elif st == "done" and kind == "advise":
+        a = actions.advice_summary(state.get("result") or {})
+        bad = ", ".join(x["worker"] for x in a["failed"])
+        e = a["failed"][0]["error"] if a["failed"] else ""
+        if a["ok"]:
+            key = "j_advice_some" if a["failed"] else "j_advice_done"
+            out.update(say=_t(lang, key, who=", ".join(a["ok"]), bad=bad, e=e), cls="kept")
+            if a["run"]:
+                out.update(link=f"/run/{a['run']}?lang={lang}", link_text=_t(lang, "j_open_run"))
+        else:
+            out.update(say=_t(lang, "j_advice_none", bad=bad or "-", e=e or "?"), cls="err")
+    elif st == "done" and kind == "scout":
+        c = actions.scout_summary(state.get("result") or {})
+        say = _t(lang, "j_scout_done", n=c["read"], c=c["chances"], u=c["unsure"]) if c["read"] else _t(lang, "j_scout_nothing")
+        if c["before"]:
+            say += " " + _t(lang, "j_scout_old", n=c["before"])
+        out.update(say=say, cls="kept", link=f"/chances?lang={lang}", link_text=_t(lang, "j_open_chances"))
+    return out
+
+
+def cards_say(r: dict, lang: str) -> dict:
+    if not r["found"]:
+        return {"say": _t(lang, "cards_none", name=r.get("name") or "-"), "cls": "err", **r}
+    say = _t(lang, "cards_done", a=len(r["added"]), u=len(r["updated"]), s=len(r["unchanged"]), n=r["cards"])
+    changed = [f"{name}: {line}" for name, line in r["changed"].items()]
+    return {**r, "say": say, "cls": "kept", "changed": ([_t(lang, "cards_changed")] + changed) if changed else []}
+
+
+def ask_html(lang: str, cards: int | None, names: list[str], problem: str | None, job: dict, open_chances: int) -> str:
+    """The Ask kb box: the jobs that needed a terminal, as buttons, and what the last one said."""
+    off = "" if names and cards else " data-off disabled"
+    facts = [_t(lang, "ask_cards", n=cards) if cards else _t(lang, "ask_no_picture"),
+             _t(lang, "ask_models", names=", ".join(names)) if names else _t(lang, "ask_no_models", e=problem or "?")]
+    said = job_say(job, lang)
+    link = (f' <a href="{_e(said["link"])}">{_e(said["link_text"])}</a>' if said.get("link") else "")
+    running = job.get("status") == "running"
+    return (f'<section class="box ask" id="ask" data-running="{1 if running else 0}"><h2>{_e(_t(lang, "ask_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "ask_note"))}</p>'
+            + "".join(f'<p class="small"><bdi>{_e(x)}</bdi></p>' for x in facts) +
+            f'<div class="acts"><button type="button" class="act" id="advise" data-job="advise"{off}>{_e(_t(lang, "b_advise"))}</button>'
+            f'<button type="button" class="act" id="scout" data-job="scout"{" data-off disabled" if not names or not cards else ""}>'
+            f'{_e(_t(lang, "b_scout"))}</button>'
+            f'<button type="button" class="act alt" id="cards">{_e(_t(lang, "b_cards"))}</button></div>'
+            f'<input type="file" id="cards-pick" accept=".md,.txt,text/markdown,text/plain" hidden>'
+            f'<p id="job" role="status" class="{_e(said["cls"])}">{_e(said["say"])}{link}</p>'
+            f'<div class="links"><a href="/check?lang={lang}">{_e(_t(lang, "l_check"))}</a>'
+            f'<a href="/chances?lang={lang}">{_e(_t(lang, "l_chances", n=open_chances))}</a></div></section>')
+
+
+def doc_page(lang: str, title: str, body: str, note: str | None = None) -> str:
+    """A plain page for what kb used to print in the terminal: the check, the chances."""
+    lang = lang if lang in LABELS else "en"
+    other = LABELS[lang]["other_lang"]
+    notes = f'<p class="soft small">{_e(note)}</p>' if note else ""
+    return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">'
+            f'<title>{_e(title)}</title><style>{INDEX_CSS}</style></head><body class="doc"><div class="wrap">'
+            f'<header><div class="top"><h1>{_e(title)}</h1><a href="?lang={other}" lang="{other}">{_e(LABELS[lang]["other"])}</a></div>'
+            f'<p><a href="/?lang={lang}">{_e(_t(lang, "back"))}</a></p>{notes}</header>'
+            f'<main lang="en" dir="ltr">{body}</main>'
+            f'<footer><p>{_e(_t(lang, "private"))}</p></footer></div></body></html>')
+
+
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
-          today: date | None = None, box: list[dict] | None = None, got: dict | None = None) -> str:
+          today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
+          ask: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -358,7 +538,8 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
                    if lessons else f'<p class="soft">{_e(_t(lang, "no_lessons"))}</p>')
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
-    keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic")
+    keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
+            "starting", "reading")
     runs_box = f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
     lessons_box = (f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -368,10 +549,11 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
                    f'<span id="say" role="status"></span></div></section>')
     # Wide like the advice page: the inbox takes the wide column, runs and lessons the narrow one. On a phone it is one
     # column, inbox first. Without an inbox the runs take the wide column.
+    # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main, side = inbox_html(box, lang, got), runs_box + lessons_box
+        main, side = inbox_html(box, lang, got), (ask or "") + runs_box + lessons_box
     else:
-        main, side = runs_box, lessons_box
+        main, side = runs_box, (ask or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -386,15 +568,46 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
 
 
 class Kb:
-    """What the server needs: where the run log and the lessons are, and its own port."""
+    """What the server needs: where your files are, and its own port. Whatever is not named sits beside the lessons
+    file (work/ by default): picture.json, models.json, private.md, scout.jsonl, cards/ and inbox/. Paths are kept
+    whole, so the buttons work whichever folder kb serve was started from."""
 
     def __init__(self, runlog: str | Path, lessons: str | Path, port: int, lang: str = "en", today: date | None = None,
-                 inbox: str | Path | None = None):
-        self.runlog, self.lessons, self.port, self.lang, self.today = Path(runlog), Path(lessons), port, lang, today
-        self.inbox = inb.Inbox(inbox if inbox is not None else self.lessons.parent / "inbox")
+                 inbox: str | Path | None = None, picture: str | Path | None = None, models: str | Path | None = None,
+                 private: str | Path | None = None, ledger: str | Path | None = None, cards: str | Path | None = None,
+                 jobs: actions.Jobs | None = None):
+        self.runlog, self.lessons, self.port, self.lang, self.today = (Path(runlog).absolute(), Path(lessons).absolute(),
+                                                                       port, lang, today)
+        work = self.lessons.parent
+        self.inbox = inb.Inbox(Path(inbox).absolute() if inbox is not None else work / "inbox")
+        self.picture = Path(picture).absolute() if picture else work / "picture.json"
+        self.models = Path(models).absolute() if models else work / "models.json"
+        self.private = Path(private).absolute() if private else work / "private.md"
+        self.ledger = Path(ledger).absolute() if ledger else work / "scout.jsonl"
+        self.cards = Path(cards).absolute() if cards else work / "cards"
+        self.jobs = jobs or actions.Jobs()
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
+
+    def cards_count(self) -> int | None:
+        if not self.picture.exists():
+            return None
+        from . import Picture
+        try:
+            return len(Picture.load(self.picture).cards)
+        except (ValueError, KeyError, OSError):
+            return None
+
+    def open_chances(self) -> int:
+        if not self.ledger.exists():
+            return 0
+        from .. import scout
+        return len(scout.open_now(scout.Ledger(self.ledger).rows(), self.today))
+
+    def ask(self, lang: str) -> str:
+        names, problem = actions.here_models(self.models)
+        return ask_html(lang, self.cards_count(), names, problem, self.jobs.state(), self.open_chances())
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -403,7 +616,9 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ""
 
     def log_message(self, fmt, *args):                    # one quiet line per request, no addresses or bodies
-        sys.stderr.write(f"  {self.command} {urlsplit(self.path).path} {args[1] if len(args) > 1 else ''}\n")
+        path = urlsplit(self.path).path
+        if path != "/api/job":                            # the page asks every few seconds while a job runs
+            sys.stderr.write(f"  {self.command} {path} {args[1] if len(args) > 1 else ''}\n")
 
     def _send(self, code: int, body: str, kind: str = "text/html; charset=utf-8") -> None:
         data = body.encode("utf-8")
@@ -447,7 +662,7 @@ class Handler(BaseHTTPRequestHandler):
                     q = parse_qs(urlsplit(self.path).query)
                     got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
-                                 today=self.kb.today, box=self.kb.inbox.items(), got=got)
+                                 today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang))
                 finally:
                     if log:
                         log.close()
@@ -465,6 +680,12 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     log.close()
                 return self._send(200, page.build(data, hist, lang=lang, today=self.kb.today, live=True, record=record))
+            if path == "/api/job":
+                return self._json(200, job_say(self.kb.jobs.state(), lang))
+            if path == "/check":
+                return self._send(200, self._check(lang))
+            if path == "/chances":
+                return self._send(200, self._chances(lang))
             if path == "/favicon.ico":
                 self.send_response(204)
                 self.end_headers()
@@ -492,7 +713,7 @@ class Handler(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             n = -1
-        cap = MAX_INBOX_BODY if path == "/api/inbox" else MAX_BODY
+        cap = MAX_INBOX_BODY if path == "/api/inbox" else MAX_CARDS_BODY if path == "/api/cards" else MAX_BODY
         if n < 0 or n > cap:
             return self._json(413, {"error": f"too long; kb takes up to {cap:,} bytes here."})
         try:
@@ -508,6 +729,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": True, "new": new, "lessons": len(have)})
             if path == "/api/inbox":
                 return self._json(200, {"ok": True, **self._inbox(body)})
+            if path in ("/api/advise", "/api/scout", "/api/cards"):
+                return self._act(path, body)
             if path not in ("/api/rate", "/api/pick"):
                 return self._json(404, {"error": "no such action."})
             log = self.kb.log()
@@ -535,6 +758,61 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             return self._json(500, {"error": f"{type(e).__name__}: {e}"})
 
+
+    def _act(self, path: str, body: dict) -> None:
+        """A button on the page: start advice or the scout in the background, or add the cards in one file now."""
+        lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+        kb = self.kb
+        if path == "/api/cards":
+            name, text = str(body.get("name") or "cards.md"), body.get("text")
+            if not isinstance(text, str):
+                raise KeyError("text must be the cards file as text.")
+            r = actions.add_cards(kb.picture, kb.cards, name, text, kb.today or date.today())
+            return self._json(200, {"ok": True, **cards_say(r, lang)})
+        if kb.jobs.state()["status"] == "running":
+            return self._json(409, {"say": _t(lang, "busy"), "cls": "err"})
+        if not kb.cards_count():
+            return self._json(400, {"say": _t(lang, "ask_no_picture"), "cls": "err"})
+        names, problem = actions.here_models(kb.models)
+        if not names:
+            return self._json(400, {"say": _t(lang, "ask_no_models", e=problem or "?"), "cls": "err"})
+        if path == "/api/scout":
+            from .. import scout
+            text = kb.inbox.root / "text"
+            if not text.is_dir() or not scout.sources([text]):
+                return self._json(400, {"say": _t(lang, "no_inbox_text"), "cls": "err"})
+            argv, kind, who = actions.scout_argv(kb, names[0]), "scout", names[:1]
+        else:
+            argv, kind, who = actions.advise_argv(kb, names, lang), "advise", names
+        try:
+            state = kb.jobs.start(kind, argv, models=who)
+        except actions.Busy:
+            return self._json(409, {"say": _t(lang, "busy"), "cls": "err"})
+        return self._json(200, {"ok": True, **job_say(state, lang)})
+
+    def _check(self, lang: str) -> str:
+        from . import Picture, check
+        title = _t(lang, "check_title")
+        if not self.kb.picture.exists():
+            return doc_page(lang, title, f'<section class="box"><p>{_e(_t(lang, "ask_no_picture"))}</p></section>')
+        runs = []
+        log = self.kb.log()
+        if log:
+            try:
+                runs = [page.gather(log, r["id"]) for r in query.runs(log, task="advise", limit=10_000)]
+            finally:
+                log.close()
+        c = check.check(Picture.load(self.kb.picture), runs, self.kb.today)
+        return doc_page(lang, title, actions.md_html(check.check_md(c), _e), _t(lang, "en_only") if lang != "en" else None)
+
+    def _chances(self, lang: str) -> str:
+        from .. import scout
+        title = _t(lang, "chances_title")
+        rows = scout.Ledger(self.kb.ledger).rows() if self.kb.ledger.exists() else []
+        if not rows:
+            return doc_page(lang, title, f'<section class="box"><p>{_e(_t(lang, "no_chances_yet"))}</p></section>')
+        return doc_page(lang, title, actions.md_html(scout.log_md(rows, self.kb.today), _e),
+                        _t(lang, "en_only") if lang != "en" else None)
 
     def _inbox(self, body: dict) -> dict:
         """One item a request: {"text": ...} for a post or a link, or {"name", "data" (base64), "note"} for a file."""

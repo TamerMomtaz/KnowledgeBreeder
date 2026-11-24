@@ -201,7 +201,14 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--lessons", default=os.environ.get("KB_LESSONS", "work/lessons.md"))
     sv.add_argument("--lang", choices=["en", "ar"], default="en")
     sv.add_argument("--inbox", default=os.environ.get("KB_INBOX", "work/inbox"), help="where what you send is kept")
+    sv.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
+    sv.add_argument("--models-file", default=mfile, help="the models the page's buttons may ask (this laptop's only)")
+    sv.add_argument("--private", default=pfile, metavar="PATH", help="your private list")
+    sv.add_argument("--ledger", default=os.environ.get("KB_SCOUT", "work/scout.jsonl"), help="the scout's ledger")
     sv.add_argument("--open", action="store_true", help="open it in your browser")
+    sv.add_argument("--install", action="store_true",
+                    help="start kb serve by itself at every login (a systemd user service), and now")
+    sv.add_argument("--uninstall", action="store_true", help="stop kb serve starting by itself")
     ib = sub.add_parser("inbox", help="what you sent from the phone: posts, links, screenshots, files, voice notes")
     ib.add_argument("action", nargs="?", choices=["list", "add", "show"], default="list",
                     help="list (the default), add files from this laptop, or show one item")
@@ -672,7 +679,19 @@ def _serve(a, dump) -> int:
     import shutil
 
     from .picture import serve
-    kb = serve.Kb(a.runlog, a.lessons, a.port, a.lang, inbox=a.inbox)
+    if a.install or a.uninstall:
+        from . import autostart
+        if a.uninstall:
+            print("\n".join(autostart.uninstall()))
+            return 0
+        args = ["--port", str(a.port), "--lang", a.lang]
+        for flag, value in (("--runlog", a.runlog), ("--lessons", a.lessons), ("--inbox", a.inbox), ("--file", a.file),
+                            ("--models-file", a.models_file), ("--private", a.private), ("--ledger", a.ledger)):
+            args += [flag, os.path.abspath(os.path.expanduser(value))]   # the service starts in no folder of yours
+        print("\n".join(autostart.install(args, a.port)))
+        return 0
+    kb = serve.Kb(a.runlog, a.lessons, a.port, a.lang, inbox=a.inbox, picture=a.file, models=a.models_file,
+                  private=a.private, ledger=a.ledger)
     try:
         srv = serve.make(kb)
     except OSError as e:

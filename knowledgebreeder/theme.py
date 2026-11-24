@@ -117,18 +117,19 @@ h2,.district h2,.panel h2{font-family:var(--display);font-stretch:condensed;font
 .tick:has(input:checked)::after{content:"\2713";margin-inline-start:auto;flex:none;width:32px;height:32px;border:2.5px solid var(--seal);
   border-radius:50%;display:grid;place-items:center;color:var(--seal);font-weight:900;transform:rotate(-14deg)}
 .tick input,.none input,.radio input,.keep input{accent-color:var(--seal)}
-.copy,.save,#add,#send,.btn[aria-pressed="true"],.chip[aria-pressed="true"],.pick.sel{
+.copy,.save,#add,#send,.act,.btn[aria-pressed="true"],.chip[aria-pressed="true"],.pick.sel{
   background:var(--seal);border-color:var(--seal);color:var(--seal-ink)}
-.copy,.save,#add,#send,#attach,#rec{position:relative;isolation:isolate;background:transparent;border:0;border-radius:0;
+.copy,.save,#add,#send,#attach,#rec,.act{position:relative;isolation:isolate;background:transparent;border:0;border-radius:0;
   box-shadow:none;padding-inline:22px}
-.copy::before,.save::before,#add::before,#send::before,#attach::before,#rec::before{content:"";position:absolute;inset:0;z-index:-1;
+.copy::before,.save::before,#add::before,#send::before,#attach::before,#rec::before,.act::before{content:"";position:absolute;inset:0;z-index:-1;
   background:var(--seal);box-shadow:4px 4px 0 var(--drop);transform:skewX(-14deg)}
-#attach::before,#rec::before{background:var(--card);border:1.5px solid var(--frame);box-shadow:3px 3px 0 var(--drop)}
+#attach::before,#rec::before,.act.alt::before{background:var(--card);border:1.5px solid var(--frame);box-shadow:3px 3px 0 var(--drop)}
 #rec[aria-pressed="true"]::before{background:var(--seal);border-color:var(--seal)}
-[dir=rtl] :is(.copy,.save,#add,#send,#attach,#rec)::before{transform:skewX(14deg)}
-:is(.copy,.save,#add,#send,#attach,#rec):focus-visible{outline-offset:7px}
-:is(.copy,.save,#add,#send,#attach,#rec):active:not(:disabled){transform:translate(2px,2px)}
-:is(.copy,.save,#add,#send,#attach,#rec):active:not(:disabled)::before{box-shadow:1px 1px 0 var(--drop)}
+.act.alt{color:var(--ink)}
+[dir=rtl] :is(.copy,.save,#add,#send,#attach,#rec,.act)::before{transform:skewX(14deg)}
+:is(.copy,.save,#add,#send,#attach,#rec,.act):focus-visible{outline-offset:7px}
+:is(.copy,.save,#add,#send,#attach,#rec,.act):active:not(:disabled){transform:translate(2px,2px)}
+:is(.copy,.save,#add,#send,#attach,#rec,.act):active:not(:disabled)::before{box-shadow:1px 1px 0 var(--drop)}
 .btn,.chip,.lang,.close,.bar select,.bar input,.pick,input.reason,.change-text,textarea{border-radius:3px}
 .btn,.chip,.lang,.close{border:1.5px solid var(--frame)}
 .tab[aria-selected="true"]{border-bottom-color:var(--seal)}
