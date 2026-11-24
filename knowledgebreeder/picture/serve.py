@@ -35,7 +35,7 @@ from urllib.parse import parse_qs, urlsplit
 from .. import theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, page, rating
+from . import actions, icon, page, rating
 from . import inbox as inb
 from . import lessons as les
 
@@ -44,8 +44,8 @@ MAX_INBOX_BODY = 30_000_000          # up to ten files a send, each up to inbox.
 MAX_CARDS_BODY = 4_000_000           # one cards file, as text
 SHORT_NOTE = 280                     # words sent with files and no longer than this are their note, not a post
 RUN = re.compile(r"^/run/(run_[0-9A-Za-z]{6,32})$")
-CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'self'; "
-       "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+CSP = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: 'self'; connect-src 'self'; "
+       "manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 LOCAL = {"127.0.0.1", "localhost", "[::1]"}
 
 LABELS = {
@@ -114,6 +114,9 @@ LABELS = {
         "s_changed": "Files you changed", "s_web": "Other pages",
         "keep": "Keep in inbox", "kept_one": "Kept in your inbox.", "today": "today", "yesterday": "yesterday",
         "files_n": "Files: {n}", "gone": "no longer there", "times": "opened {n} times",
+        "shared": "Shared to kb. Add a few words if you like, then press Send to kb.",
+        "share_again": "kb was not ready for that share. Open kb once on this phone, then share again.",
+        "app_desc": "Your kb: send it posts, links, screenshots, files and voice notes from any app.",
     },
     "ar": {
         "title": "kb الخاص بك",
@@ -178,6 +181,9 @@ LABELS = {
         "s_opened": "ملفات فتحتها", "s_changed": "ملفات غيّرتها", "s_web": "صفحات أخرى",
         "keep": "احفظه في الصندوق", "kept_one": "حُفظ في صندوقك.", "today": "اليوم", "yesterday": "أمس",
         "files_n": "ملفات: {n}", "gone": "لم يعد موجودًا", "times": "مرات الفتح: {n}",
+        "shared": "وصلت المشاركة إلى kb. أضف كلمات إن شئت، ثم اضغط أرسل إلى kb.",
+        "share_again": "لم يكن kb جاهزًا لهذه المشاركة. افتح kb مرة على هذا الهاتف، ثم شارك مرة أخرى.",
+        "app_desc": "kb الخاص بك: أرسل إليه المنشورات والروابط ولقطات الشاشة والملفات والرسائل الصوتية من أي تطبيق.",
     },
 }
 
@@ -327,6 +333,7 @@ INDEX_JS = """
 (function(){
 "use strict";
 var L = JSON.parse(document.getElementById("data").textContent);
+if ("serviceWorker" in navigator && window.isSecureContext){ navigator.serviceWorker.register("/sw.js").catch(function(){}); }
 var b = document.getElementById("add"), t = document.getElementById("lesson"), say = document.getElementById("say");
 function ready(){ b.disabled = !t.value.trim(); }
 t.addEventListener("input", ready); ready();
@@ -430,6 +437,26 @@ function take(fl){
   draw();
 }
 post.addEventListener("input", can);
+var asked = new URLSearchParams(location.search).get("shared");
+if (asked === "again") tell(L.share_again, "err");
+if (asked === "1" && window.caches){
+  // the share helper (sw.js) kept what another app shared; put it in the box, and you press Send to kb
+  caches.open("kb-share").then(function(c){
+    return c.match("/share/meta").then(function(m){
+      if (!m) return null;
+      return m.json().then(function(meta){
+        var words = [];
+        [meta.title, meta.text, meta.url].forEach(function(w){
+          w = (w || "").trim(); if (w && !words.some(function(o){ return o.indexOf(w) >= 0; })) words.push(w); });
+        post.value = words.join("\\n");
+        return Promise.all((meta.files || []).map(function(f, i){
+          return c.match("/share/file/" + i).then(function(r){ return r ? r.blob() : null; }); }))
+          .then(function(blobs){ blobs.forEach(function(x, i){ if (x){ x.name = meta.files[i].name; take([x]); } }); });
+      });
+    }).then(function(){ return caches.delete("kb-share"); });
+  }).then(function(){ can(); tell(L.shared, "kept"); history.replaceState(null, "", "/?lang=" + L.lang + "#inbox"); post.focus(); })
+    .catch(function(e){ tell(L.not_sent.replace("{e}", e.message), "err"); });
+}
 attach.addEventListener("click", function(){ pick.click(); });
 pick.addEventListener("change", function(){ take(pick.files); pick.value = ""; });
 post.addEventListener("paste", function(e){
@@ -746,6 +773,51 @@ def where_page(lang: str, data: dict, q: str = "") -> str:
             f'<script id="data" type="application/json">{blob}</script><script>{WHERE_JS}</script></body></html>')
 
 
+# The share helper. A phone that has kb on its home screen lists kb in its Share menu; what you share arrives here as
+# a form, and this keeps it in the phone's own cache and opens kb's page with it in the inbox box. Nothing is sent to
+# the laptop until you press Send to kb, through the same /api/inbox as the page.
+SW_JS = """
+"use strict";
+self.addEventListener("install", function(){ self.skipWaiting(); });
+self.addEventListener("activate", function(e){ e.waitUntil(self.clients.claim()); });
+self.addEventListener("fetch", function(e){
+  var u = new URL(e.request.url);
+  if (e.request.method !== "POST" || u.origin !== self.location.origin || u.pathname !== "/share") return;
+  e.respondWith((async function(){
+    var f = await e.request.formData();
+    var files = f.getAll("files").filter(function(x){ return x && typeof x === "object" && x.size > 0; });
+    await caches.delete("kb-share");
+    var c = await caches.open("kb-share");
+    for (var i = 0; i < files.length; i++){
+      await c.put("/share/file/" + i, new Response(files[i], {headers: {"Content-Type": files[i].type || "application/octet-stream"}}));
+    }
+    await c.put("/share/meta", new Response(JSON.stringify({title: f.get("title") || "", text: f.get("text") || "",
+      url: f.get("url") || "", files: files.map(function(x){ return {name: x.name || "shared", type: x.type || ""}; })}),
+      {headers: {"Content-Type": "application/json"}}));
+    return Response.redirect("/?shared=1#inbox", 303);
+  })());
+});
+"""
+
+SHARE_ACCEPT = ["image/*", "audio/*", "video/*", "text/*", "application/pdf",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ".pdf", ".docx", ".pptx", ".txt", ".md", ".jpg", ".jpeg", ".png", ".webp", ".m4a", ".ogg", ".opus", ".mp3"]
+
+
+def manifest(lang: str) -> dict:
+    """What a phone needs to put kb on its home screen and in its Share menu."""
+    return {"name": "kb", "short_name": "kb", "id": "/", "description": _t(lang, "app_desc"),
+            "lang": lang, "dir": "rtl" if lang == "ar" else "ltr", "start_url": "/", "scope": "/",
+            "display": "standalone", "background_color": "#10151d", "theme_color": "#1d2430",
+            "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                      {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                      {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}],
+            "share_target": {"action": "/share", "method": "POST", "enctype": "multipart/form-data",
+                             "params": {"title": "title", "text": "text", "url": "url",
+                                        "files": [{"name": "files", "accept": SHARE_ACCEPT}]}}}
+
+
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
           ask: str | None = None, where: str | None = None) -> str:
@@ -774,7 +846,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
-            "starting", "reading", "where_on")
+            "starting", "reading", "where_on", "shared", "share_again")
     runs_box = f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
     lessons_box = (f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -793,7 +865,9 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">'
-            f'<title>{_e(_t(lang, "title"))}</title><style>{INDEX_CSS}</style></head><body><div class="wrap">'
+            f'<title>{_e(_t(lang, "title"))}</title><link rel="manifest" href="/manifest.webmanifest">'
+            f'<link rel="icon" href="/icon-192.png" sizes="192x192"><meta name="theme-color" content="#1d2430">'
+            f'<style>{INDEX_CSS}</style></head><body><div class="wrap">'
             f'<header><div class="top"><h1>{_e(_t(lang, "title"))}</h1><a href="/?lang={LABELS[lang]["other_lang"]}" '
             f'lang="{LABELS[lang]["other_lang"]}">{_e(LABELS[lang]["other"])}</a></div>'
             f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}{hud}</header>'
@@ -893,8 +967,8 @@ class Handler(BaseHTTPRequestHandler):
         if path != "/api/job":                            # the page asks every few seconds while a job runs
             sys.stderr.write(f"  {self.command} {path} {args[1] if len(args) > 1 else ''}\n")
 
-    def _send(self, code: int, body: str, kind: str = "text/html; charset=utf-8") -> None:
-        data = body.encode("utf-8")
+    def _send(self, code: int, body: str | bytes, kind: str = "text/html; charset=utf-8") -> None:
+        data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(data)))
@@ -973,6 +1047,13 @@ class Handler(BaseHTTPRequestHandler):
                 days = int((q.get("days") or ["2"])[0]) if (q.get("days") or ["2"])[0].isdigit() else 2
                 days = days if days in WHERE_DAYS else 2
                 return self._send(200, where_page(lang, self.kb.where(days), (q.get("q") or [""])[0][:200]))
+            if path == "/manifest.webmanifest":
+                return self._send(200, json.dumps(manifest(self.kb.lang), ensure_ascii=False),
+                                  "application/manifest+json; charset=utf-8")
+            if path == "/sw.js":
+                return self._send(200, SW_JS, "text/javascript; charset=utf-8")
+            if path in ("/icon-192.png", "/icon-512.png"):
+                return self._send(200, icon.png(192 if "192" in path else 512), "image/png")
             if path == "/favicon.ico":
                 self.send_response(204)
                 self.end_headers()
@@ -988,6 +1069,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard():
             return None
         path = urlsplit(self.path).path
+        if path == "/share":
+            # a share the helper did not catch (kb not opened on this phone yet). Nothing in it is read or kept, so no
+            # other site can put anything in your inbox this way; the page asks you to share again.
+            return self._redirect("/?shared=again#inbox")
         if self.headers.get("X-KB") != "1":
             return self._json(403, {"error": "kb takes changes only from its own pages."})
         origin = urlsplit(self.headers.get("Origin") or "").netloc.lower()
