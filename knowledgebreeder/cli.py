@@ -39,6 +39,8 @@
     kb inbox                                    what you sent: posts, links, screenshots, PDFs, Word files, voice notes
     kb inbox add FILES --note "why I kept it"   put files from this laptop in the inbox too
     kb inbox show ID                            one item, with the text kb read from it
+    kb serve --install                          kb serve starts by itself at every login, no terminal needed
+    kb where --find "reverse"                   where you were: AI chats, searches, pages and files with that word
     kb scout read work/sources                  read saved pages against your projects, look for chances
     kb scout log                                everything the scout read, with what it passed over and why
 
@@ -216,6 +218,10 @@ def main(argv: list[str] | None = None) -> int:
     ib.add_argument("--inbox", default=os.environ.get("KB_INBOX", "work/inbox"), help="the inbox folder")
     ib.add_argument("--note", help="a few words kept with what you add"); ib.add_argument("--text", help="add these words")
     ib.add_argument("--today"); ib.add_argument("--json", action="store_true")
+    wr = sub.add_parser("where", help="where you were: pages, searches, AI chats and files on this laptop, newest first")
+    wr.add_argument("--days", type=int, default=2, help="1 is today, 2 (the default) is since yesterday")
+    wr.add_argument("--find", help="only lines with all these words, for example a word from a lost chat")
+    wr.add_argument("--json", action="store_true")
     so = sub.add_parser("scout", help="read saved sources against your picture")
     so.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
     so.add_argument("--ledger", default=os.environ.get("KB_SCOUT", "work/scout.jsonl"))
@@ -265,6 +271,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
+    if a.cmd == "where":
+        from . import where
+        data = where.gather(max(1, a.days), skip=[os.path.dirname(os.path.abspath(os.environ.get("KB_LESSONS", "work/lessons.md")))])
+        if a.json:
+            dump({**data, "items": where.find(data["items"], a.find) if a.find else data["items"]})
+        else:
+            print(where.md(data, a.find), end="")
+        return 0
     if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox"):
         from .models import ModelError, Refused
         try:

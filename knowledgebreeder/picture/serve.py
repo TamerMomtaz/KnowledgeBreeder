@@ -24,6 +24,8 @@ import html
 import json
 import re
 import sys
+import threading
+import time
 import traceback
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,6 +33,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from .. import theme
+from .. import where as wh
 from ..runlog import RunLog, query
 from . import actions, page, rating
 from . import inbox as inb
@@ -92,6 +95,25 @@ LABELS = {
         "check_title": "Is your picture ready?", "chances_title": "Chances from your inbox",
         "back": "Back to kb", "en_only": "This page is in English for now.",
         "no_chances_yet": "kb has not read your inbox yet. Press Find chances in my inbox on the first page.",
+        "where_h": "Where you were",
+        "where_note": "kb can show the pages you visited, what you searched and asked AI, and the files you opened or "
+                      "changed. It reads them on this laptop each time, keeps none of it, and sends nothing anywhere.",
+        "where_on": "Show where I was", "where_off": "Stop showing where I was",
+        "where_sum": "{since}. AI chats: {ai}. Searches: {search}. Documents: {doc}. Files opened: {opened}. "
+                     "Files changed: {changed}. Other pages: {web}.",
+        "d_1": "Today", "d_2": "Since yesterday", "d_7": "Last 7 days", "d_30": "Last 30 days",
+        "where_all": "See all and find a word", "where_find": "Find a word in where you were",
+        "where_found": "Showing {n}.", "where_none": "Nothing for these days.",
+        "where_partial": "Your home folder is big, so kb stopped looking for changed files after {s} seconds. "
+                         "Some may be missing.",
+        "where_problem": "Could not read {e}", "where_browsers": "Browsers read: {b}.",
+        "where_no_browser": "kb found no browser history in your home folder.",
+        "k_ai": "AI chat", "k_search": "search", "k_doc": "document", "k_web": "page", "k_opened": "opened",
+        "k_changed": "changed",
+        "s_ai": "AI chats", "s_search": "Searches", "s_doc": "Documents and research", "s_opened": "Files you opened",
+        "s_changed": "Files you changed", "s_web": "Other pages",
+        "keep": "Keep in inbox", "kept_one": "Kept in your inbox.", "today": "today", "yesterday": "yesterday",
+        "files_n": "Files: {n}", "gone": "no longer there", "times": "opened {n} times",
     },
     "ar": {
         "title": "kb الخاص بك",
@@ -138,6 +160,24 @@ LABELS = {
         "check_title": "هل صورتك جاهزة؟", "chances_title": "الفرص من صندوقك",
         "back": "عودة إلى kb", "en_only": "هذه الصفحة بالإنجليزية حاليًا.",
         "no_chances_yet": "لم يقرأ kb صندوقك بعد. اضغط «ابحث عن فرص في صندوقي» في الصفحة الأولى.",
+        "where_h": "أين كنت",
+        "where_note": "يستطيع kb أن يعرض الصفحات التي زرتها، وما بحثت عنه وسألت عنه الذكاء الاصطناعي، والملفات التي "
+                      "فتحتها أو غيّرتها. يقرؤها من هذا اللابتوب في كل مرة، ولا يحتفظ بشيء منها، ولا يرسل شيئًا إلى أي مكان.",
+        "where_on": "اعرض أين كنت", "where_off": "أوقف عرض أين كنت",
+        "where_sum": "{since}. محادثات ذكاء اصطناعي: {ai}. عمليات بحث: {search}. مستندات: {doc}. ملفات فتحتها: "
+                     "{opened}. ملفات غيّرتها: {changed}. صفحات أخرى: {web}.",
+        "d_1": "اليوم", "d_2": "منذ أمس", "d_7": "آخر 7 أيام", "d_30": "آخر 30 يومًا",
+        "where_all": "اعرض الكل وابحث عن كلمة", "where_find": "ابحث عن كلمة فيما زرته",
+        "where_found": "المعروض: {n}.", "where_none": "لا شيء في هذه الأيام.",
+        "where_partial": "مجلدك الرئيسي كبير، فتوقف kb عن البحث عن الملفات المتغيرة بعد {s} ثوانٍ. قد ينقص بعضها.",
+        "where_problem": "تعذرت قراءة {e}", "where_browsers": "المتصفحات المقروءة: {b}.",
+        "where_no_browser": "لم يجد kb سجل تصفح في مجلدك الرئيسي.",
+        "k_ai": "ذكاء اصطناعي", "k_search": "بحث", "k_doc": "مستند", "k_web": "صفحة", "k_opened": "فُتح",
+        "k_changed": "تغيّر",
+        "s_ai": "محادثات الذكاء الاصطناعي", "s_search": "عمليات البحث", "s_doc": "المستندات والأبحاث",
+        "s_opened": "ملفات فتحتها", "s_changed": "ملفات غيّرتها", "s_web": "صفحات أخرى",
+        "keep": "احفظه في الصندوق", "kept_one": "حُفظ في صندوقك.", "today": "اليوم", "yesterday": "أمس",
+        "files_n": "ملفات: {n}", "gone": "لم يعد موجودًا", "times": "مرات الفتح: {n}",
     },
 }
 
@@ -251,6 +291,7 @@ footer{color:var(--soft);font-size:.86rem;margin-top:20px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .acts{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:12px 0 4px}
 .acts button{width:100%}
+.ask p{overflow-wrap:anywhere}
 .links{display:flex;flex-wrap:wrap;gap:0 18px;margin-top:8px}
 .links a{color:var(--accent);font-weight:600;min-height:44px;display:inline-flex;align-items:center}
 #job{margin:10px 0 0;min-height:1.5em;overflow-wrap:anywhere}
@@ -261,6 +302,25 @@ ol.md li,ul.md li{margin:0 0 12px;overflow-wrap:anywhere}
 .more{display:block;color:var(--soft);font-size:.92rem;margin-top:3px}
 .doc .box p{overflow-wrap:anywhere}
 .doc .wrap{max-width:900px}
+.trail{list-style:none;margin:10px 0 0;padding:0}
+.trail li{display:grid;grid-template-columns:7.4em minmax(0,1fr) auto;column-gap:12px;border-top:1px solid var(--line);padding:9px 2px;align-items:center}
+.trail li:first-child{border-top:0}
+.trail .t{color:var(--soft);font-size:.86rem;grid-row:1/span 2;align-self:start;padding-top:2px}
+.trail .ti{grid-column:2;overflow-wrap:anywhere;font-weight:600;color:inherit}
+.trail a.ti{color:var(--accent)}
+.trail .h{grid-column:2;color:var(--soft);font-size:.86rem;overflow-wrap:anywhere;display:flex;flex-wrap:wrap;gap:0 10px}
+.trail .k{font-weight:700;color:var(--ink)}
+.trail .keep{grid-column:3;grid-row:1/span 2;min-height:40px;padding:0 12px;font-size:.88rem}
+.trail .keep.kept{color:var(--ok)}
+.trail .fold{display:block}
+.trail .fold>details>summary{cursor:pointer;min-height:44px;display:flex;flex-wrap:wrap;align-items:center;gap:0 12px;overflow-wrap:anywhere}
+.trail .fold ul{padding-inline-start:10px}
+@media (max-width:600px){.trail li{grid-template-columns:minmax(0,1fr) auto}.trail .t{grid-row:auto;grid-column:1}
+  .trail .ti,.trail .h{grid-column:1}.trail .keep{grid-column:2;grid-row:1/span 3}}
+.days{display:flex;flex-wrap:wrap;gap:0 18px;margin:4px 0 10px}
+.days a{color:var(--accent);min-height:44px;display:inline-flex;align-items:center}
+.days a[aria-current]{color:var(--ink);font-weight:700;text-decoration:none}
+input[type=search]{width:100%;min-height:46px;background:var(--bg);color:inherit;border:1px solid var(--line);border-radius:10px;padding:0 12px;font:inherit}
 """
 
 INDEX_JS = """
@@ -327,6 +387,17 @@ if (ask){
     r.readAsText(f);
   });
   if (ask.getAttribute("data-running") === "1"){ jobLock(true); jobPoll(); }
+}
+
+var won = document.getElementById("where-on");
+if (won){
+  won.addEventListener("click", function(){
+    won.disabled = true; won.textContent = L.saving;
+    fetch("/api/where", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify({on: true})})
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); location.replace("/?lang=" + L.lang + "#where"); }); })
+      .catch(function(e){ won.disabled = false; won.textContent = L.where_on;
+        var ws = document.getElementById("where-say"); ws.textContent = L.not_saved.replace("{e}", e.message); ws.className = "err"; });
+  });
 }
 
 var post = document.getElementById("post");
@@ -511,9 +582,173 @@ def doc_page(lang: str, title: str, body: str, note: str | None = None) -> str:
             f'<footer><p>{_e(_t(lang, "private"))}</p></footer></div></body></html>')
 
 
+WHERE_TOP = ("ai", "search", "doc", "opened")
+WHERE_DAYS = (1, 2, 7, 30)
+WHERE_CAP = 1000                     # lines a section shows; a word you search for finds older ones
+
+WHERE_JS = """
+(function(){
+"use strict";
+var L = JSON.parse(document.getElementById("data").textContent);
+var f = document.getElementById("find"), n = document.getElementById("found");
+function post(path, body){
+  return fetch(path, {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify(body)})
+    .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.say || j.error || String(r.status)); return j; }); });
+}
+function run(){
+  var ws = f.value.toLowerCase().split(/\\s+/).filter(Boolean), shown = 0;
+  Array.prototype.forEach.call(document.querySelectorAll("li[data-text]"), function(li){
+    var t = li.getAttribute("data-text"), ok = ws.every(function(w){ return t.indexOf(w) >= 0; });
+    li.hidden = !ok; if (ok) shown++;
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("li.fold"), function(li){
+    li.hidden = !li.querySelector("li[data-text]:not([hidden])");
+    if (ws.length && !li.hidden) li.querySelector("details").open = true;
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("section[data-kind]"), function(sc){
+    sc.hidden = !sc.querySelector("li[data-text]:not([hidden])");
+  });
+  n.textContent = L.where_found.replace("{n}", shown);
+}
+if (f){
+  f.addEventListener("input", run);
+  f.addEventListener("keydown", function(e){
+    if (e.key === "Enter"){ e.preventDefault();
+      location.href = "/where?days=" + L.days + "&lang=" + L.lang + "&q=" + encodeURIComponent(f.value.trim()); }
+  });
+  run();
+}
+document.addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest("button.keep") : null;
+  if (!b || b.disabled) return;
+  b.disabled = true;
+  var body = b.hasAttribute("data-path") ? {path: b.getAttribute("data-path"), lang: L.lang}
+                                         : {url: b.getAttribute("data-url"), title: b.getAttribute("data-title"), lang: L.lang};
+  post("/api/where/keep", body).then(function(j){ b.textContent = j.say; b.classList.add("kept"); })
+    .catch(function(x){ b.disabled = false; b.textContent = x.message; b.classList.add("err"); });
+});
+var off = document.getElementById("where-off");
+if (off) off.addEventListener("click", function(){
+  off.disabled = true;
+  post("/api/where", {on: false}).then(function(){ location.replace("/?lang=" + L.lang); })
+    .catch(function(x){ off.disabled = false; off.textContent = x.message; });
+});
+})();
+"""
+
+
+def _when(ts: float, now: float, lang: str) -> str:
+    return wh.when(ts, now, (_t(lang, "today"), _t(lang, "yesterday")))
+
+
+def where_line(x: dict, data: dict, lang: str, keep: bool = False) -> str:
+    """One page or file: when, what, where, and a button to keep it in the inbox."""
+    k = x["kind"]
+    text = _e(f'{x["title"]} {x["where"]}'.lower())
+    notes = []
+    if k in ("opened", "changed"):
+        title = f'<bdi class="ti">{_e(x["title"])}</bdi>'
+        place = _e(wh.short(x["where"], data["home"]))
+        btn = (f'<button type="button" class="btn keep" data-path="{_e(x["where"])}">{_e(_t(lang, "keep"))}</button>'
+               if keep and not x.get("gone") else "")
+        if x.get("gone"):
+            notes.append(_t(lang, "gone"))
+    else:
+        title = (f'<a class="ti" href="{_e(x["where"])}" target="_blank" rel="noreferrer noopener">'
+                 f'<bdi>{_e(x["title"])}</bdi></a>')
+        place = _e(wh.host(x["where"]))
+        btn = (f'<button type="button" class="btn keep" data-url="{_e(x["where"])}" data-title="{_e(x["title"][:300])}">'
+               f'{_e(_t(lang, "keep"))}</button>' if keep else "")
+    if x.get("count", 1) > 1 and k != "changed":
+        notes.append(_t(lang, "times", n=x["count"]))
+    extra = "".join(f"<span>{_e(n)}</span>" for n in notes)
+    return (f'<li data-text="{text}"><span class="t">{_e(_when(x["ts"], data["now"], lang))}</span>{title}'
+            f'<span class="h"><span class="k">{_e(_t(lang, "k_" + k))}</span><bdi dir="ltr">{place}</bdi>{extra}</span>'
+            f'{btn}</li>')
+
+
+def _where_notes(data: dict, lang: str) -> str:
+    out = []
+    if data["browsers"]:
+        out.append(_t(lang, "where_browsers", b=", ".join(data["browsers"])))
+    else:
+        out.append(_t(lang, "where_no_browser"))
+    out += [_t(lang, "where_problem", e=p) for p in data["problems"]]
+    if data["stopped"]:
+        out.append(_t(lang, "where_partial", s=f'{data["budget"]:g}'))
+    return "".join(f'<p class="soft small"><bdi>{_e(x)}</bdi></p>' for x in out)
+
+
+def where_box(lang: str, on: bool, data: dict | None, problem: str | None = None) -> str:
+    """The Where you were box on the first page: off until you turn it on, then the newest pages and files."""
+    head = f'<section class="box where" id="where"><h2>{_e(_t(lang, "where_h"))}</h2>'
+    if not on:
+        return (head + f'<p class="soft small">{_e(_t(lang, "where_note"))}</p><div class="row">'
+                f'<button type="button" id="where-on">{_e(_t(lang, "where_on"))}</button>'
+                f'<span id="where-say" role="status"></span></div></section>')
+    if data is None:
+        return head + f'<p class="err">{_e(_t(lang, "where_problem", e=problem or "?"))}</p></section>'
+    c = wh.counts(data["items"])
+    summary = _t(lang, "where_sum", since=_t(lang, f'd_{data["days"]}'), **c)
+    top = [x for x in data["items"] if x["kind"] in WHERE_TOP][:8]
+    lst = (f'<ul class="trail">{"".join(where_line(x, data, lang) for x in top)}</ul>' if top
+           else f'<p class="soft">{_e(_t(lang, "where_none"))}</p>')
+    return (head + f'<p><bdi>{_e(summary)}</bdi></p>{lst}{_where_notes(data, lang)}'
+            f'<div class="links"><a href="/where?lang={lang}">{_e(_t(lang, "where_all"))}</a></div></section>')
+
+
+def where_page(lang: str, data: dict, q: str = "") -> str:
+    """Everything kb can see of where you were, by kind, with a word filter and a Keep button on each line."""
+    lang = lang if lang in LABELS else "en"
+    other = LABELS[lang]["other_lang"]
+    items = wh.find(data["items"], q) if q else data["items"]
+    here = ' aria-current="page"'
+    days = "".join(f'<a href="/where?days={d}&amp;lang={lang}"{here if d == data["days"] else ""}>'
+                   f'{_e(_t(lang, "d_" + str(d)))}</a>' for d in WHERE_DAYS)
+    secs = []
+    for k in ("ai", "search", "doc", "opened", "changed", "web"):
+        rows = [x for x in items if x["kind"] == k]
+        if not rows:
+            continue
+        if k == "changed":
+            lis = []
+            for g in wh.folders(rows)[:WHERE_CAP]:
+                files = "".join(where_line(x, data, lang, keep=True) for x in g["files"][:200])
+                lis.append(f'<li class="fold"><details><summary><span class="t">{_e(_when(g["ts"], data["now"], lang))}</span>'
+                           f'<bdi dir="ltr" class="ti">{_e(wh.short(g["folder"], data["home"]))}</bdi>'
+                           f'<span class="soft small">{_e(_t(lang, "files_n", n=len(g["files"])))}</span></summary>'
+                           f'<ul class="trail">{files}</ul></details></li>')
+            body = "".join(lis)
+        else:
+            body = "".join(where_line(x, data, lang, keep=True) for x in rows[:WHERE_CAP])
+        more = (f'<p class="soft small">{_e(_t(lang, "where_found", n=f"{WHERE_CAP} / {len(rows)}"))}</p>'
+                if len(rows) > WHERE_CAP and k != "changed" else "")
+        secs.append(f'<section class="box" data-kind="{k}"><h2>{_e(_t(lang, "s_" + k))} ({len(rows)})</h2>'
+                    f'<ul class="trail">{body}</ul>{more}</section>')
+    c = wh.counts(items)
+    summary = _t(lang, "where_sum", since=_t(lang, f'd_{data["days"]}'), **c)
+    main = "".join(secs) or f'<section class="box"><p>{_e(_t(lang, "where_none"))}</p></section>'
+    blob = json.dumps({"lang": lang, "days": data["days"], "where_found": LABELS[lang]["where_found"]},
+                      ensure_ascii=False).replace("<", "\\u003c")
+    title = _t(lang, "where_h")
+    return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">'
+            f'<title>{_e(title)}</title><style>{INDEX_CSS}</style></head><body class="doc"><div class="wrap">'
+            f'<header><div class="top"><h1>{_e(title)}</h1><a href="/where?days={data["days"]}&amp;lang={other}" lang="{other}">'
+            f'{_e(LABELS[lang]["other"])}</a></div>'
+            f'<p><a href="/?lang={lang}">{_e(_t(lang, "back"))}</a></p><nav class="days">{days}</nav>'
+            f'<p><bdi>{_e(summary)}</bdi></p>'
+            f'<input type="search" id="find" dir="auto" value="{_e(q)}" placeholder="{_e(_t(lang, "where_find"))}" '
+            f'aria-label="{_e(_t(lang, "where_find"))}"><p class="soft small" id="found" role="status"></p>'
+            f'{_where_notes(data, lang)}</header><main>{main}</main>'
+            f'<footer><p>{_e(_t(lang, "where_note"))}</p><div class="row"><button type="button" class="btn" id="where-off">'
+            f'{_e(_t(lang, "where_off"))}</button></div></footer></div>'
+            f'<script id="data" type="application/json">{blob}</script><script>{WHERE_JS}</script></body></html>')
+
+
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
-          ask: str | None = None) -> str:
+          ask: str | None = None, where: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -539,7 +774,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
-            "starting", "reading")
+            "starting", "reading", "where_on")
     runs_box = f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
     lessons_box = (f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -551,9 +786,9 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main, side = inbox_html(box, lang, got), (ask or "") + runs_box + lessons_box
+        main, side = inbox_html(box, lang, got) + (where or ""), (ask or "") + runs_box + lessons_box
     else:
-        main, side = runs_box, (ask or "") + lessons_box
+        main, side = runs_box + (where or ""), (ask or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -575,7 +810,7 @@ class Kb:
     def __init__(self, runlog: str | Path, lessons: str | Path, port: int, lang: str = "en", today: date | None = None,
                  inbox: str | Path | None = None, picture: str | Path | None = None, models: str | Path | None = None,
                  private: str | Path | None = None, ledger: str | Path | None = None, cards: str | Path | None = None,
-                 jobs: actions.Jobs | None = None):
+                 jobs: actions.Jobs | None = None, home: str | Path | None = None, where_budget: float = 4.0):
         self.runlog, self.lessons, self.port, self.lang, self.today = (Path(runlog).absolute(), Path(lessons).absolute(),
                                                                        port, lang, today)
         work = self.lessons.parent
@@ -586,6 +821,11 @@ class Kb:
         self.ledger = Path(ledger).absolute() if ledger else work / "scout.jsonl"
         self.cards = Path(cards).absolute() if cards else work / "cards"
         self.jobs = jobs or actions.Jobs()
+        self.where_file = work / "where.json"
+        self.home, self.where_budget = (Path(home) if home else None), where_budget
+        self._where: dict[int, tuple[float, dict]] = {}
+        self._where_lock = threading.Lock()
+        self.where_paths: set[str] = set()
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
@@ -608,6 +848,39 @@ class Kb:
     def ask(self, lang: str) -> str:
         names, problem = actions.here_models(self.models)
         return ask_html(lang, self.cards_count(), names, problem, self.jobs.state(), self.open_chances())
+
+    def where_on(self) -> bool:
+        try:
+            return json.loads(self.where_file.read_text(encoding="utf-8")).get("on") is True
+        except (OSError, ValueError, AttributeError):
+            return False
+
+    def set_where(self, on: bool) -> None:
+        self.where_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.where_file.with_suffix(".part")
+        tmp.write_text(json.dumps({"on": bool(on), "since": (self.today or date.today()).isoformat()}), encoding="utf-8")
+        tmp.replace(self.where_file)
+        self._where.clear()
+
+    def where(self, days: int = 2, fresh: float = 120) -> dict:
+        """What kb can see of where you were, read again at most every two minutes."""
+        with self._where_lock:
+            hit = self._where.get(days)
+            if hit and time.monotonic() - hit[0] < fresh:
+                return hit[1]
+            data = wh.gather(days, self.home, skip=[self.lessons.parent], budget=self.where_budget)
+            self._where[days] = (time.monotonic(), data)
+            self.where_paths |= {x["where"] for x in data["items"] if x["kind"] in ("opened", "changed")}
+            return data
+
+    def where_html(self, lang: str) -> str:
+        if not self.where_on():
+            return where_box(lang, False, None)
+        try:
+            return where_box(lang, True, self.where(2))
+        except Exception as e:                            # noqa: BLE001 - the rest of the page must still open
+            traceback.print_exc()
+            return where_box(lang, True, None, f"{type(e).__name__}: {e}")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -633,6 +906,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(data)
+
+    def _redirect(self, to: str) -> None:
+        self.send_response(303)
+        self.send_header("Location", to)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _json(self, code: int, obj: dict) -> None:
         self._send(code, json.dumps(obj, ensure_ascii=False), "application/json; charset=utf-8")
@@ -662,7 +941,8 @@ class Handler(BaseHTTPRequestHandler):
                     q = parse_qs(urlsplit(self.path).query)
                     got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
-                                 today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang))
+                                 today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
+                                 where=self.kb.where_html(lang))
                 finally:
                     if log:
                         log.close()
@@ -686,6 +966,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, self._check(lang))
             if path == "/chances":
                 return self._send(200, self._chances(lang))
+            if path == "/where":
+                if not self.kb.where_on():
+                    return self._redirect(f"/?lang={lang}#where")
+                q = parse_qs(urlsplit(self.path).query)
+                days = int((q.get("days") or ["2"])[0]) if (q.get("days") or ["2"])[0].isdigit() else 2
+                days = days if days in WHERE_DAYS else 2
+                return self._send(200, where_page(lang, self.kb.where(days), (q.get("q") or [""])[0][:200]))
             if path == "/favicon.ico":
                 self.send_response(204)
                 self.end_headers()
@@ -731,6 +1018,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": True, **self._inbox(body)})
             if path in ("/api/advise", "/api/scout", "/api/cards"):
                 return self._act(path, body)
+            if path == "/api/where":
+                self.kb.set_where(body.get("on") is True)
+                return self._json(200, {"ok": True, "on": self.kb.where_on()})
+            if path == "/api/where/keep":
+                return self._json(200, {"ok": True, **self._keep(body)})
             if path not in ("/api/rate", "/api/pick"):
                 return self._json(404, {"error": "no such action."})
             log = self.kb.log()
@@ -813,6 +1105,31 @@ class Handler(BaseHTTPRequestHandler):
             return doc_page(lang, title, f'<section class="box"><p>{_e(_t(lang, "no_chances_yet"))}</p></section>')
         return doc_page(lang, title, actions.md_html(scout.log_md(rows, self.kb.today), _e),
                         _t(lang, "en_only") if lang != "en" else None)
+
+    def _keep(self, body: dict) -> dict:
+        """A page or a file from Where you were, kept in the inbox: a page as its title and address, a file as a copy.
+        Only a file kb just showed you can be kept, never any other path."""
+        lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+        today = self.kb.today or date.today()
+        if not self.kb.where_on():
+            raise KeyError("Where you were is off.")
+        if body.get("path") is not None:
+            path = str(body.get("path"))
+            if path not in self.kb.where_paths:
+                raise KeyError("kb keeps only a file it showed you under Where you were.")
+            f = Path(path)
+            if not f.is_file():
+                raise KeyError(f"{f.name} is no longer there.")
+            if f.stat().st_size > inb.MAX_FILE:
+                raise KeyError(_t(lang, "too_big", name=f.name))
+            item = self.kb.inbox.add(f.read_bytes(), f.name, None, today, via="laptop")
+        else:
+            url = wh.clean_url(str(body.get("url") or "").strip())
+            if not wh.kind_of(url):
+                raise KeyError("kb keeps only web pages (http or https) from Where you were.")
+            title = " ".join(str(body.get("title") or "").split())[:300]
+            item = self.kb.inbox.add_text(f"{title}\n{url}" if title and title != url else url, None, today, via="laptop")
+        return {"say": _t(lang, "kept_one"), "id": item["id"], "new": item["new"]}
 
     def _inbox(self, body: dict) -> dict:
         """One item a request: {"text": ...} for a post or a link, or {"name", "data" (base64), "note"} for a file."""
