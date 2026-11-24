@@ -66,6 +66,7 @@ LABELS = {
         "inbox_ph": "Paste a post or a link, or write a few words. A few words sent with files become their note.",
         "attach": "Attach files", "record": "Record a voice note", "stop": "Stop recording",
         "send": "Send to kb", "sending": "Sending…", "sent": "Kept: {n}.", "again": "{n} already in your inbox.",
+        "in_cards": "Cards files: {n}. They went into your picture, not the inbox; Ask kb says what changed.",
         "not_sent": "Not sent: {e}. Sending again is safe: kb keeps each thing once.",
         "remove": "Remove {name}", "too_big": "{name} is over 20 MB, so kb cannot keep it.",
         "no_mic": "No microphone: {e}", "inbox_empty": "Nothing here yet.",
@@ -158,6 +159,7 @@ LABELS = {
         "inbox_ph": "الصق منشورًا أو رابطًا، أو اكتب كلمات قليلة. الكلمات القليلة المرسلة مع ملفات تصير ملاحظتها.",
         "attach": "أرفق ملفات", "record": "سجّل رسالة صوتية", "stop": "أوقف التسجيل",
         "send": "أرسل إلى kb", "sending": "جارٍ الإرسال…", "sent": "حُفظ: {n}.", "again": "موجود من قبل في صندوقك: {n}.",
+        "in_cards": "ملفات بطاقات: {n}. ذهبت إلى صورتك لا إلى الصندوق، ويقول «اسأل kb» ما الذي تغيّر.",
         "not_sent": "لم يُرسل: {e}. الإرسال مرة أخرى آمن: يحفظ kb كل شيء مرة واحدة.",
         "remove": "احذف {name}", "too_big": "{name} أكبر من 20 ميغابايت، فلا يحفظه kb.",
         "no_mic": "لا ميكروفون: {e}", "inbox_empty": "لا شيء هنا بعد.",
@@ -556,14 +558,14 @@ function one(body){
     .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || String(r.status)); return j; }); });
 }
 send.addEventListener("click", function(){
-  var text = post.value.trim(), jobs = [], note = "", kept = 0, again = 0, done = 0;
+  var text = post.value.trim(), jobs = [], note = "", kept = 0, again = 0, cards = 0, done = 0;
   if (text && (!files.length || text.length > L.short || /^https?:\\/\\/\\S+$/i.test(text))) jobs.push(function(){ return one({text: text}); });
   else note = text;
   files.forEach(function(f){ jobs.push(function(){ return b64(f.blob).then(function(d){ return one({name: f.name, data: d, note: note}); }); }); });
   busy = true; can(); send.textContent = L.sending; tell("");
   jobs.reduce(function(p, job){ return p.then(function(){ return job().then(function(j){
-      if (j.new) kept++; else again++; done++; tell(done + " / " + jobs.length); }); }); }, Promise.resolve())
-    .then(function(){ location.replace("/?lang=" + L.lang + "&kept=" + kept + "&again=" + again + "#inbox"); })
+      if (j.kind === "cards") cards++; else if (j.new) kept++; else again++; done++; tell(done + " / " + jobs.length); }); }); }, Promise.resolve())
+    .then(function(){ location.replace("/?lang=" + L.lang + "&kept=" + kept + "&again=" + again + "&cards=" + cards + "#inbox"); })
     .catch(function(e){ busy = false; send.textContent = L.send; can(); tell(L.not_sent.replace("{e}", e.message), "err"); });
 });
 })();
@@ -574,7 +576,8 @@ def inbox_html(box: list[dict], lang: str, got: dict | None = None, show: int = 
     """The inbox box: paste, attach, record, send, then the newest items."""
     got = got or {}
     said = " ".join(x for x in (_t(lang, "sent", n=got["kept"]) if got.get("kept") else "",
-                                _t(lang, "again", n=got["again"]) if got.get("again") else "") if x)
+                                _t(lang, "again", n=got["again"]) if got.get("again") else "",
+                                _t(lang, "in_cards", n=got["cards"]) if got.get("cards") else "") if x)
     rows = []
     for x in box[:show]:
         what = x.get("name") or x.get("preview") or "-"
@@ -1147,7 +1150,7 @@ class Handler(BaseHTTPRequestHandler):
                 log = self.kb.log()
                 try:
                     q = parse_qs(urlsplit(self.path).query)
-                    got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again") and v and v[0].isdigit()}
+                    got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again", "cards") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
                                  where=self.kb.where_html(lang), waits=self.kb.waits_html(lang))
@@ -1362,11 +1365,30 @@ class Handler(BaseHTTPRequestHandler):
                 raw = base64.b64decode(data, validate=True)
             except (binascii.Error, ValueError):
                 raise KeyError("data was not base64.") from None
-            item = self.kb.inbox.add(raw, str(body.get("name") or "") or None, str(body.get("note") or "") or None,
-                                     today, via="phone")
+            name = str(body.get("name") or "") or None
+            if (r := self._cards_in(raw, name or "cards.md", today)) is not None:
+                return r
+            item = self.kb.inbox.add(raw, name, str(body.get("note") or "") or None, today, via="phone")
         else:
-            item = self.kb.inbox.add_text(str(body.get("text") or ""), None, today, via="phone")
+            text = str(body.get("text") or "")
+            if (r := self._cards_in(text.strip().encode("utf-8"), "pasted cards.md", today)) is not None:
+                return r
+            item = self.kb.inbox.add_text(text, None, today, via="phone")
         return {k: item[k] for k in ("id", "kind", "status", "new", "name")}
+
+    def _cards_in(self, raw: bytes, name: str, today: date) -> dict | None:
+        """A cards file sent to the inbox belongs in the picture: add its cards, as Add cards from a file does.
+        None when it holds no PROJECT CARD, so it stays an ordinary inbox item."""
+        from . import cards
+        if len(raw) > actions.MAX_CARDS or inb.sniff(raw)[0] != "text":
+            return None
+        text = inb._decode(raw) or ""
+        if not cards.parse(text):
+            return None
+        r = actions.add_cards(self.kb.picture, self.kb.cards, name, text, today)
+        self.kb.cards_said = (time.time(), r)
+        return {"id": None, "kind": "cards", "status": "cards", "new": bool(r["added"] or r["updated"]), "name": name,
+                "found": r["found"], "added": len(r["added"]), "updated": len(r["updated"]), "cards": r["cards"]}
 
 
 def make(kb: Kb) -> ThreadingHTTPServer:

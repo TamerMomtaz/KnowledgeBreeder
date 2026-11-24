@@ -271,3 +271,28 @@ def test_install_stops_a_kb_serve_left_in_a_window_you_cannot_find(tmp_path, mon
     lines = autostart.install([], port, workdir=tmp_path, run=systemctl, stop=stop)
     assert lines[0] == "Stopped the kb serve that was still running in another window."
     assert lines[1].startswith("kb now starts by itself")
+
+
+def test_a_cards_file_sent_to_the_inbox_goes_into_the_picture(tmp_path, up):
+    import base64
+    kb = up(_kb(tmp_path))
+    text = CARDS.read_text(encoding="utf-8")
+    data = base64.b64encode(("﻿" + text).encode("utf-8")).decode()
+    code, _, said = ask(kb, "POST", "/api/inbox", {"name": "cards-from-the-bakery.md", "data": data, "note": "my cards"})
+    r = json.loads(said)
+    assert code == 200 and r["kind"] == "cards" and r["new"] is True and r["added"] == r["cards"] == 5
+    assert len(Picture.load(kb.picture).cards) == 5 and kb.inbox.items() == []          # the picture, not the inbox
+    assert [k.name for k in kb.cards.iterdir()] == ["2026-11-20-cards-from-the-bakery.md"]
+    _, _, doc = ask(kb, "GET", "/?lang=en&kept=0&again=0&cards=1")
+    assert "Cards files: 1. They went into your picture, not the inbox; Ask kb says what changed." in doc
+    assert "New cards: 5." in doc.split('id="job"')[1].split("</p>")[0] and 'id="waits"' in doc
+    again = json.loads(ask(kb, "POST", "/api/inbox", {"name": "cards-from-the-bakery.md", "data": data})[2])
+    assert again["kind"] == "cards" and again["new"] is False and again["added"] == again["updated"] == 0
+
+    pasted = json.loads(ask(kb, "POST", "/api/inbox", {"text": text.replace("a list of past customers",
+                                                                            "a list of past customers by area", 1)})[2])
+    assert pasted["kind"] == "cards" and pasted["updated"] == 1 and kb.inbox.items() == []
+    plain = json.loads(ask(kb, "POST", "/api/inbox", {"text": "Notes from the Saturday class: bring more flour."})[2])
+    assert plain["kind"] == "text" and plain["new"] is True and len(kb.inbox.items()) == 1
+    note = base64.b64encode("PROJECT CARD is just a phrase in this note.".encode()).decode()
+    assert json.loads(ask(kb, "POST", "/api/inbox", {"name": "n.md", "data": note})[2])["kind"] == "text"
