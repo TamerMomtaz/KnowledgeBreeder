@@ -92,6 +92,7 @@ LABELS = {
         "no_inbox_text": "Your inbox has nothing kb can read yet. Send a post, a link or a file first.",
         "cards_done": "New cards: {a}. Updated: {u}. Unchanged: {s}. Cards in your picture now: {n}.",
         "cards_none": "No PROJECT CARD in {name}, so nothing was added.", "cards_changed": "What changed:",
+        "cards_see": "See where your work waits",
         "check_title": "Is your picture ready?", "chances_title": "Chances from your inbox",
         "back": "Back to kb", "en_only": "This page is in English for now.",
         "no_chances_yet": "kb has not read your inbox yet. Press Find chances in my inbox on the first page.",
@@ -182,6 +183,7 @@ LABELS = {
         "no_inbox_text": "لا شيء في صندوقك يستطيع kb قراءته بعد. أرسل منشورًا أو رابطًا أو ملفًا أولًا.",
         "cards_done": "بطاقات جديدة: {a}. حُدّثت: {u}. بلا تغيير: {s}. في صورتك الآن: {n}.",
         "cards_none": "لا توجد PROJECT CARD في {name}، فلم يُضف شيء.", "cards_changed": "ما الذي تغيّر:",
+        "cards_see": "انظر أين ينتظر عملك",
         "check_title": "هل صورتك جاهزة؟", "chances_title": "الفرص من صندوقك",
         "back": "عودة إلى kb", "en_only": "هذه الصفحة بالإنجليزية حاليًا.",
         "no_chances_yet": "لم يقرأ kb صندوقك بعد. اضغط «ابحث عن فرص في صندوقي» في الصفحة الأولى.",
@@ -411,11 +413,16 @@ if (ask){
     return fetch(path, {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify(body)})
       .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.say || j.error || String(r.status)); return j; }); });
   };
+  var redraw = function(){        // load the page again at the Ask box; a change of the #part alone would not reload it
+    var u = "/?lang=" + L.lang;
+    if (location.pathname + location.search === u){ history.replaceState(null, "", u + "#ask"); location.reload(); }
+    else location.replace(u + "#ask");
+  };
   var jobPoll = function(){
     fetch("/api/job?lang=" + L.lang).then(function(r){ return r.json(); }).then(function(j){
       jobShow(j);
       if (j.status === "running") setTimeout(jobPoll, 2500);
-      else location.replace("/?lang=" + L.lang + "#ask");    // the new run, chances and counts show; the sentence stays
+      else redraw();                                         // the new run, chances and counts show; the sentence stays
     }).catch(function(){ setTimeout(jobPoll, 5000); });
   };
   Array.prototype.forEach.call(acts, function(b){
@@ -433,7 +440,11 @@ if (ask){
     var r = new FileReader();
     r.onload = function(){
       jobCall("/api/cards", {name: f.name, text: String(r.result), lang: L.lang})
-        .then(function(j){ jobShow(j); jobLock(false); })
+        .then(function(j){
+          jobShow(j);
+          if (j.reload) redraw();                            // every box shows the new cards; the sentence stays
+          else jobLock(false);
+        })
         .catch(function(e){ jobShow({say: e.message, cls: "err"}); jobLock(false); });
     };
     r.onerror = function(){ jobShow({say: String(r.error || "?"), cls: "err"}); jobLock(false); };
@@ -617,15 +628,20 @@ def cards_say(r: dict, lang: str) -> dict:
         return {"say": _t(lang, "cards_none", name=r.get("name") or "-"), "cls": "err", **r}
     say = _t(lang, "cards_done", a=len(r["added"]), u=len(r["updated"]), s=len(r["unchanged"]), n=r["cards"])
     changed = [f"{name}: {line}" for name, line in r["changed"].items()]
-    return {**r, "say": say, "cls": "kept", "changed": ([_t(lang, "cards_changed")] + changed) if changed else []}
+    # new or changed cards change every count on the page, so the page loads again and this sentence stays on it
+    return {**r, "say": say, "cls": "kept", "changed": ([_t(lang, "cards_changed")] + changed) if changed else [],
+            "link": "#waits", "link_text": _t(lang, "cards_see"), "reload": bool(r["added"] or r["updated"])}
 
 
-def ask_html(lang: str, cards: int | None, names: list[str], problem: str | None, job: dict, open_chances: int) -> str:
+def ask_html(lang: str, cards: int | None, names: list[str], problem: str | None, job: dict, open_chances: int,
+             cards_said: tuple[float, dict] | None = None) -> str:
     """The Ask kb box: the jobs that needed a terminal, as buttons, and what the last one said."""
     off = "" if names and cards else " data-off disabled"
     facts = [_t(lang, "ask_cards", n=cards) if cards else _t(lang, "ask_no_picture"),
              _t(lang, "ask_models", names=", ".join(names)) if names else _t(lang, "ask_no_models", e=problem or "?")]
     said = job_say(job, lang)
+    if cards_said and job.get("status") != "running" and cards_said[0] >= (job.get("ended") or job.get("started") or 0):
+        said = cards_say(cards_said[1], lang)                 # the cards file came after the last job
     link = (f' <a href="{_e(said["link"])}">{_e(said["link_text"])}</a>' if said.get("link") else "")
     running = job.get("status") == "running"
     return (f'<section class="box ask" id="ask" data-running="{1 if running else 0}"><h2>{_e(_t(lang, "ask_h"))}</h2>'
@@ -636,7 +652,8 @@ def ask_html(lang: str, cards: int | None, names: list[str], problem: str | None
             f'{_e(_t(lang, "b_scout"))}</button>'
             f'<button type="button" class="act alt" id="cards">{_e(_t(lang, "b_cards"))}</button></div>'
             f'<input type="file" id="cards-pick" accept=".md,.txt,text/markdown,text/plain" hidden>'
-            f'<p id="job" role="status" class="{_e(said["cls"])}">{_e(said["say"])}{link}</p>'
+            f'<p id="job" role="status" class="{_e(said["cls"])}">{_e(said["say"])}{link}'
+            + "".join(f'<span class="changed"><bdi>{_e(x)}</bdi></span>' for x in said.get("changed") or []) + '</p>'
             f'<div class="links"><a href="/check?lang={lang}">{_e(_t(lang, "l_check"))}</a>'
             f'<a href="/chances?lang={lang}">{_e(_t(lang, "l_chances", n=open_chances))}</a></div></section>')
 
@@ -994,6 +1011,7 @@ class Kb:
         self._where_lock = threading.Lock()
         self.where_paths: set[str] = set()
         self._waits: tuple | None = None
+        self.cards_said: tuple[float, dict] | None = None     # when the page last added a cards file, and what it found
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
@@ -1015,7 +1033,8 @@ class Kb:
 
     def ask(self, lang: str) -> str:
         names, problem = actions.here_models(self.models)
-        return ask_html(lang, self.cards_count(), names, problem, self.jobs.state(), self.open_chances())
+        return ask_html(lang, self.cards_count(), names, problem, self.jobs.state(), self.open_chances(),
+                        self.cards_said)
 
     def where_on(self) -> bool:
         try:
@@ -1260,6 +1279,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(text, str):
                 raise KeyError("text must be the cards file as text.")
             r = actions.add_cards(kb.picture, kb.cards, name, text, kb.today or date.today())
+            kb.cards_said = (time.time(), r)
             return self._json(200, {"ok": True, **cards_say(r, lang)})
         if kb.jobs.state()["status"] == "running":
             return self._json(409, {"say": _t(lang, "busy"), "cls": "err"})

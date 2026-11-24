@@ -75,6 +75,10 @@ def test_cards_are_added_from_the_page_and_nothing_is_overwritten(tmp_path, up):
     r = json.loads(said)
     assert code == 200 and r["found"] == r["cards"] == 5 and len(r["added"]) == 5
     assert r["say"] == "New cards: 5. Updated: 0. Unchanged: 0. Cards in your picture now: 5."
+    assert r["reload"] is True and r["link"] == "#waits" and r["link_text"] == "See where your work waits"
+    _, _, doc = ask(kb, "GET", "/")                    # the page loads again: the sentence stays, the box counts the cards
+    job = doc.split('id="job"')[1].split("</p>")[0]
+    assert "New cards: 5." in job and 'href="#waits"' in job and 'id="waits"' in doc
     kept = list((tmp_path / "w" / "cards").iterdir())
     assert [k.name for k in kept] == ["2026-11-20-my-cards.md"] and kept[0].read_text(encoding="utf-8") == text
     assert len(Picture.load(kb.picture).cards) == 5
@@ -84,6 +88,10 @@ def test_cards_are_added_from_the_page_and_nothing_is_overwritten(tmp_path, up):
     edited = text.replace("a list of past customers", "a list of past customers and their phones", 1)
     third = json.loads(ask(kb, "POST", "/api/cards", {"name": "my cards.md", "text": edited, "lang": "ar"})[2])
     assert third["updated"] == ["Saturday baking class"] and third["changed"][0] == "ما الذي تغيّر:"
+    assert third["reload"] is True and again["reload"] is False
+    _, _, doc = ask(kb, "GET", "/?lang=ar")
+    job = doc.split('id="job"')[1].split("</p>")[0]
+    assert 'class="changed"' in job and "Saturday baking class" in job and "انظر أين ينتظر عملك" in job
     assert sorted(k.name for k in kb.cards.iterdir()) == ["2026-11-20-my-cards.md", "2026-11-20-my-cards~2.md"]
     none = json.loads(ask(kb, "POST", "/api/cards", {"name": "notes.txt", "text": "just notes"})[2])
     assert none["found"] == 0 and none["say"] == "No PROJECT CARD in notes.txt, so nothing was added."
