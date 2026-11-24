@@ -22,6 +22,7 @@
     kb picture overlaps / gaps / reuse          the same idea twice, what is missing, what could travel
     kb picture brief                            a short list of moves worth a look
     kb picture check                            is your picture ready for a model? five questions, and your ticks
+    kb picture engines                          where your work waits: what frees the most, how long things wait
     kb picture changes                          what changed on your cards, and what left them; nothing is overwritten
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
     kb picture advise                           advice written by a model, held to your own cards and your lessons
@@ -153,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--lessons", default=lfile); x.add_argument("--today")
     x = ps.add_parser("check", help="is your picture ready for a model? five questions, and what your ticks say")
     x.add_argument("--json", action="store_true"); x.add_argument("--today"); x.add_argument("--runlog", default=runlog)
+    x = ps.add_parser("engines", help="where your work waits: what frees the most, and how long things wait")
+    x.add_argument("--json", action="store_true"); x.add_argument("--today")
     x = ps.add_parser("private", help="add a name to your private list, or list it")
     x.add_argument("text", nargs="*", help="a name or word that never goes to a model off this machine; none lists them")
     x.add_argument("--private", default=pfile, metavar="PATH")
@@ -415,6 +418,11 @@ def _picture(a, dump) -> int:
         return _advise(a, dump, pic, today)
     if a.pic_cmd == "check":
         return _check(a, dump, pic, today)
+    if a.pic_cmd == "engines":
+        from .picture import engines
+        r = engines.run(pic, today)
+        dump(r) if a.json else print(engines.md(r), end="")
+        return 0
     if a.pic_cmd == "changes":
         from .picture import changes
         project = None
