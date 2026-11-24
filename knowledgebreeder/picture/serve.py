@@ -684,7 +684,7 @@ def where_box(lang: str, on: bool, data: dict | None, problem: str | None = None
     head = f'<section class="box where" id="where"><h2>{_e(_t(lang, "where_h"))}</h2>'
     if not on:
         return (head + f'<p class="soft small">{_e(_t(lang, "where_note"))}</p><div class="row">'
-                f'<button type="button" id="where-on">{_e(_t(lang, "where_on"))}</button>'
+                f'<button type="button" class="act alt" id="where-on">{_e(_t(lang, "where_on"))}</button>'
                 f'<span id="where-say" role="status"></span></div></section>')
     if data is None:
         return head + f'<p class="err">{_e(_t(lang, "where_problem", e=problem or "?"))}</p></section>'
