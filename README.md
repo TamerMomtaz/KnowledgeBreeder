@@ -641,6 +641,26 @@ needs no sudo, runs as you, and still listens on `127.0.0.1` only. After you upd
 again so it starts the new version. `kb serve --uninstall` takes it away; if the page does not open, see why with
 `journalctl --user -u kb-serve.service -n 30`.
 
+#### Where you were
+
+Work gets scattered: a chat in one AI, a search, a PDF in Downloads, notes in a folder. The **Where you were** box
+on the page shows them together, newest first, since yesterday: your AI chats (Claude, ChatGPT, Gemini, Perplexity,
+DeepSeek, Kimi and others), your searches, documents and research pages, the files you opened and the files you
+changed. **See all and find a word** opens every day you choose (today, since yesterday, 7 or 30 days); type a word
+from a lost chat or paper and only the lines with it stay. **Keep in inbox** puts a page (its title and address) or a
+copy of a file into your inbox, so the scout and advice can build on it. In the terminal:
+
+```bash
+kb where --find "reverse engineering"
+```
+
+It is off until you press **Show where I was**. kb reads it fresh on the laptop each time, from what is already
+there: the history file of Chrome, Chromium, Brave, Edge, Vivaldi, Opera or Firefox (copied first, as the browser
+keeps it locked), the desktop's list of files you opened, and the dates on the files in your home folder (hidden
+folders, caches and code environments are skipped). It keeps none of it, sends none of it anywhere and shows none of
+it to a model. Addresses lose the parts that look like keys (`token=`, `code=`, `key=` and the like) before they are
+shown. **Stop showing where I was** turns it off again.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:
