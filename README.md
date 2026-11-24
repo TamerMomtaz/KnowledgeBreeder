@@ -676,6 +676,27 @@ folders, caches and code environments are skipped). It keeps none of it, sends n
 it to a model. Addresses lose the parts that look like keys (`token=`, `code=`, `key=` and the like) before they are
 shown. **Stop showing where I was** turns it off again.
 
+#### Where your work waits
+
+Two small engines from operations research, worked out from your cards on the laptop. No model is asked, and nothing
+leaves the machine. They show on the page under the inbox, and in the terminal:
+
+```bash
+kb picture engines
+```
+
+- **What frees the most.** Every need that is not met yet waits on someone or something, the third part of the need
+  on the card. kb groups the needs by who they wait on, and for each one names the cards that would have nothing left
+  waiting once that part is done. Cards that wait on one thing only are listed as **one step from free**, the card
+  tied to most other cards first, because moving it moves the most.
+- **How long things wait.** Little's law: what is open = how fast it closes × how long it waits. kb counts what is
+  open now (needs not met, open decisions, unfinished work), reads how fast things close from the versions it keeps
+  of your cards, and says how long a new one waits at that pace. When more open than close, the wait keeps growing:
+  that is the warning. kb cannot tell done from dropped, so the pace is a sketch, and it shows only after two weeks
+  of versions. **Quiet longest** lists the cards with open work that have not moved for the longest time.
+
+The math comes from the research "Mathematical Engines of Plan→T", carried over from a plant to your own work.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:

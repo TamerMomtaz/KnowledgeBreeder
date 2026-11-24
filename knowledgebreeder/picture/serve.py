@@ -35,7 +35,7 @@ from urllib.parse import parse_qs, urlsplit
 from .. import theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, icon, page, rating
+from . import actions, engines, icon, page, rating
 from . import inbox as inb
 from . import lessons as les
 
@@ -117,6 +117,28 @@ LABELS = {
         "shared": "Shared to kb. Add a few words if you like, then press Send to kb.",
         "share_again": "kb was not ready for that share. Open kb once on this phone, then share again.",
         "app_desc": "Your kb: send it posts, links, screenshots, files and voice notes from any app.",
+        "eng_h": "Where your work waits",
+        "eng_note": "Worked out from your cards on this laptop, with no model: what waits on whom, and how long things "
+                    "wait. The math comes from your research Mathematical Engines of Plan→T.",
+        "eng_frees": "What frees the most",
+        "eng_you": "Needs that wait on you: {n} of {all}. On cards: {c}.",
+        "eng_row": "{who}. Needs: {n}. Cards: {c}.",
+        "eng_row_free": "Once done, nothing is left waiting on: {names}.",
+        "eng_you_name": "You", "eng_nobody": "Nobody named", "eng_more": "And {n} more.",
+        "eng_one": "One step from free: each of these cards waits on one thing only.",
+        "eng_waits_on": "waits on {who}", "eng_you_in": "you", "eng_nobody_in": "nobody named",
+        "eng_row_free_nobody": "Name who does these, and once they are done nothing is left waiting on: {names}.",
+        "eng_wait": "How long things wait",
+        "eng_open": "Open now. Needs not met: {n}. Open decisions: {d}. Unfinished pieces: {u}.",
+        "eng_pace": "You close about {p} a week. At that pace a new one waits about {w} weeks.",
+        "eng_none_closed": "Days of versions: {d}, and nothing closed in them. At this pace, what waits does not get done.",
+        "eng_early": "Days kb has kept versions of your cards: {d}. After {m} it can tell your pace.",
+        "eng_flow": "Since kb began keeping versions. Opened: {o}. Closed: {c}.",
+        "eng_growing": "More open than close, so the wait keeps growing.",
+        "eng_quiet": "Quiet longest",
+        "eng_quiet_row": "Open: {n}. Days since it last moved: {d}.",
+        "eng_no_waiting": "No card has a need waiting.",
+        "eng_problem": "Could not read your cards: {e}",
     },
     "ar": {
         "title": "kb الخاص بك",
@@ -184,6 +206,28 @@ LABELS = {
         "shared": "وصلت المشاركة إلى kb. أضف كلمات إن شئت، ثم اضغط أرسل إلى kb.",
         "share_again": "لم يكن kb جاهزًا لهذه المشاركة. افتح kb مرة على هذا الهاتف، ثم شارك مرة أخرى.",
         "app_desc": "kb الخاص بك: أرسل إليه المنشورات والروابط ولقطات الشاشة والملفات والرسائل الصوتية من أي تطبيق.",
+        "eng_h": "أين ينتظر عملك",
+        "eng_note": "محسوب من بطاقاتك على هذا اللابتوب، دون أي نموذج: ما ينتظر مَن، وكم تنتظر الأشياء. الحساب مأخوذ من "
+                    "بحثك Mathematical Engines of Plan→T.",
+        "eng_frees": "ما الذي يحرّر أكثر",
+        "eng_you": "احتياجات تنتظرك: {n} من {all}. على بطاقات عددها: {c}.",
+        "eng_row": "{who}. احتياجات: {n}. بطاقات: {c}.",
+        "eng_row_free": "بعد إنجازه لا يبقى شيء ينتظر في: {names}.",
+        "eng_you_name": "أنت", "eng_nobody": "لم يُسمَّ أحد", "eng_more": "وغيرها: {n}.",
+        "eng_one": "على بُعد خطوة: كل بطاقة من هذه تنتظر شيئًا واحدًا فقط.",
+        "eng_waits_on": "تنتظر: {who}", "eng_you_in": "أنت", "eng_nobody_in": "لم يُسمَّ أحد",
+        "eng_row_free_nobody": "سمِّ مَن يقوم بها، وبعد إنجازها لا يبقى شيء ينتظر في: {names}.",
+        "eng_wait": "كم تنتظر الأشياء",
+        "eng_open": "المفتوح الآن. احتياجات لم تتحقق: {n}. قرارات مفتوحة: {d}. أعمال غير مكتملة: {u}.",
+        "eng_pace": "تُغلق في الأسبوع نحو: {p}. بهذه الوتيرة ينتظر الجديد بالأسابيع نحو: {w}.",
+        "eng_none_closed": "أيام النسخ: {d}، ولم يُغلق فيها شيء. بهذه الوتيرة لا يُنجَز ما ينتظر.",
+        "eng_early": "أيام احتفاظ kb بنسخ بطاقاتك: {d}. بعد {m} يومًا يستطيع أن يقرأ وتيرتك.",
+        "eng_flow": "منذ بدأ kb يحتفظ بالنسخ. فُتح: {o}. أُغلق: {c}.",
+        "eng_growing": "ما يُفتح أكثر مما يُغلق، فالانتظار يطول باستمرار.",
+        "eng_quiet": "الأطول هدوءًا",
+        "eng_quiet_row": "مفتوح: {n}. أيام منذ آخر حركة: {d}.",
+        "eng_no_waiting": "لا توجد بطاقة فيها احتياج ينتظر.",
+        "eng_problem": "تعذرت قراءة بطاقاتك: {e}",
     },
 }
 
@@ -326,6 +370,8 @@ ol.md li,ul.md li{margin:0 0 12px;overflow-wrap:anywhere}
 .days{display:flex;flex-wrap:wrap;gap:0 18px;margin:4px 0 10px}
 .days a{color:var(--accent);min-height:44px;display:inline-flex;align-items:center}
 .days a[aria-current]{color:var(--ink);font-weight:700;text-decoration:none}
+.eng h3{font-size:1.02rem;margin:16px 0 4px}
+.eng .lead{font-weight:700}
 input[type=search]{width:100%;min-height:46px;background:var(--bg);color:inherit;border:1px solid var(--line);border-radius:10px;padding:0 12px;font:inherit}
 """
 
@@ -724,6 +770,53 @@ def where_box(lang: str, on: bool, data: dict | None, problem: str | None = None
             f'<div class="links"><a href="/where?lang={lang}">{_e(_t(lang, "where_all"))}</a></div></section>')
 
 
+def waits_box(lang: str, r: dict | None, problem: str | None = None) -> str:
+    """Where your work waits: what frees the most, and how long things wait. Worked out from the cards, no model."""
+    head = (f'<section class="box eng" id="waits"><h2>{_e(_t(lang, "eng_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "eng_note"))}</p>')
+    if r is None:
+        return head + f'<p class="err">{_e(_t(lang, "eng_problem", e=problem or "?"))}</p></section>'
+    f, c = r["frees"], r["clock"]
+
+    def who(x: dict, inside: bool = False) -> str:
+        if x["you"]:
+            return _t(lang, "eng_you_in" if inside else "eng_you_name")
+        return x["who"] or _t(lang, "eng_nobody_in" if inside else "eng_nobody")
+
+    out = [head, f'<h3>{_e(_t(lang, "eng_frees"))}</h3>']
+    if not f["waiting"]:
+        out.append(f'<p>{_e(_t(lang, "eng_no_waiting"))}</p>')
+    else:
+        if f["you"]:
+            out.append(f'<p class="lead">{_e(_t(lang, "eng_you", n=f["you"]["needs"], all=f["waiting"], c=f["you"]["cards"]))}</p>')
+        rows = []
+        for g in f["by"]:
+            say = "eng_row_free_nobody" if g["nobody"] else "eng_row_free"
+            free = (f'<span class="more">{_e(_t(lang, say, names=", ".join(g["free"])))}</span>'
+                    if g["free"] else "")
+            rows.append(f'<li>{_e(_t(lang, "eng_row", who=who(g), n=g["needs"], c=g["cards"]))}{free}</li>')
+        if f["more"]:
+            rows.append(f'<li class="soft">{_e(_t(lang, "eng_more", n=f["more"]))}</li>')
+        out.append(f'<ul class="md">{"".join(rows)}</ul>')
+        if f["one_step"]:
+            out.append(f'<p>{_e(_t(lang, "eng_one"))}</p><ul class="md">' + "".join(
+                f'<li><b><bdi>{_e(x["card"])}</bdi></b>: <bdi>{_e(x["need"])}</bdi>'
+                f'<span class="more">{_e(_t(lang, "eng_waits_on", who=who(x, True)))}</span></li>' for x in f["one_step"])
+                + "</ul>")
+    o = c["open"]
+    out.append(f'<h3>{_e(_t(lang, "eng_wait"))}</h3>'
+               f'<p>{_e(_t(lang, "eng_open", n=o["needs"], d=o["decisions"], u=o["unfinished"]))}</p>'
+               f'<p>{_e(engines.pace(c, lang))}</p>')
+    if c["ready"] and (c["opened"] or c["closed"]):
+        grow = f' <b>{_e(_t(lang, "eng_growing"))}</b>' if c["growing"] else ""
+        out.append(f'<p>{_e(_t(lang, "eng_flow", o=c["opened"], c=c["closed"]))}{grow}</p>')
+    if c["quiet"]:
+        out.append(f'<h3>{_e(_t(lang, "eng_quiet"))}</h3><ul class="md">' + "".join(
+            f'<li><bdi>{_e(x["card"])}</bdi><span class="more">{_e(_t(lang, "eng_quiet_row", n=x["open"], d=x["days"]))}'
+            f'</span></li>' for x in c["quiet"]) + "</ul>")
+    return "".join(out) + "</section>"
+
+
 def where_page(lang: str, data: dict, q: str = "") -> str:
     """Everything kb can see of where you were, by kind, with a word filter and a Keep button on each line."""
     lang = lang if lang in LABELS else "en"
@@ -820,7 +913,7 @@ def manifest(lang: str) -> dict:
 
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
-          ask: str | None = None, where: str | None = None) -> str:
+          ask: str | None = None, where: str | None = None, waits: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -858,9 +951,9 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main, side = inbox_html(box, lang, got) + (where or ""), (ask or "") + runs_box + lessons_box
+        main, side = inbox_html(box, lang, got) + (waits or "") + (where or ""), (ask or "") + runs_box + lessons_box
     else:
-        main, side = runs_box + (where or ""), (ask or "") + lessons_box
+        main, side = runs_box + (waits or "") + (where or ""), (ask or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -900,6 +993,7 @@ class Kb:
         self._where: dict[int, tuple[float, dict]] = {}
         self._where_lock = threading.Lock()
         self.where_paths: set[str] = set()
+        self._waits: tuple | None = None
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
@@ -946,6 +1040,27 @@ class Kb:
             self._where[days] = (time.monotonic(), data)
             self.where_paths |= {x["where"] for x in data["items"] if x["kind"] in ("opened", "changed")}
             return data
+
+    def waits(self) -> dict | None:
+        """The two engines on the cards, worked out again only when the picture file or the day changes."""
+        if not self.picture.exists():
+            return None
+        today = self.today or date.today()
+        key = (self.picture.stat().st_mtime_ns, today)
+        if self._waits and self._waits[0] == key:
+            return self._waits[1]
+        from . import Picture
+        r = engines.run(Picture.load(self.picture), today)
+        self._waits = (key, r)
+        return r
+
+    def waits_html(self, lang: str) -> str:
+        """The box, or nothing while there are no cards: the Ask kb box already says how to add them."""
+        try:
+            r = self.waits()
+        except (ValueError, KeyError, OSError) as e:
+            return waits_box(lang, None, f"{type(e).__name__}: {e}")
+        return waits_box(lang, r) if r is not None else ""
 
     def where_html(self, lang: str) -> str:
         if not self.where_on():
@@ -1016,7 +1131,7 @@ class Handler(BaseHTTPRequestHandler):
                     got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
-                                 where=self.kb.where_html(lang))
+                                 where=self.kb.where_html(lang), waits=self.kb.waits_html(lang))
                 finally:
                     if log:
                         log.close()
