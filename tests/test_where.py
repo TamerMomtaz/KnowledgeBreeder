@@ -200,3 +200,20 @@ def test_kb_where_prints_the_same_in_the_terminal(home, monkeypatch, capsys):
     assert out.startswith("# Where you were since") and "## Searches" in out and "algorithmic reverse engineering" in out
     assert main(["where", "--days", "30", "--json"]) == 0
     assert len(json.loads(capsys.readouterr().out)["items"]) == 9
+
+
+def test_it_finds_browsers_kept_in_snap_and_in_their_own_folders(tmp_path):
+    h = tmp_path / "home"
+    rows = [("https://claude.ai/chat/abc", "Reverse engineering habits - Claude", NOW - HOUR)]
+    _chrome(h / "snap/brave/412/.config/BraveSoftware/Brave-Browser/Default/History", rows)
+    (h / "snap/brave/current").symlink_to(h / "snap/brave/412")                 # snap's own link: read once
+    _chrome(h / ".config/opera/History", [("https://www.google.com/search?q=reverse", "x", NOW - 2 * HOUR)])
+    _firefox(h / ".zen/k3x.Default (release)/places.sqlite", [("https://arxiv.org/abs/1", "A paper", NOW - 3 * HOUR)])
+    _chrome(h / "snap/chromium/common/chromium/Profile 2/History", [("https://example.com/", "Example", NOW - 4 * HOUR)])
+    (h / ".config/Code/User/History").mkdir(parents=True)                       # VS Code's folder of that name
+    _touch(h / ".config/notes/History", NOW, "not a database")
+    _chrome(h / ".config/BraveSoftware/Brave-Browser/Default/Cache/History", rows)   # inside a cache: not looked at
+    names = [n for n, _, _ in wh.history_files(h)]
+    assert sorted(names) == ["Brave", "Chromium (Profile 2)", "Opera", "Zen"]
+    d = wh.gather(2, h, now=NOW)
+    assert d["browsers"] == names and wh.counts(d["items"])["ai"] == 1 and wh.counts(d["items"])["search"] == 1

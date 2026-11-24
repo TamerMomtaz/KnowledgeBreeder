@@ -649,7 +649,8 @@ To have the page there whenever you log in, without a terminal window, run once:
 kb serve --install
 ```
 
-It writes one small file, `~/.config/systemd/user/kb-serve.service`, and starts kb serve now and at every login. It
+It writes one small file, `~/.config/systemd/user/kb-serve.service`, and starts kb serve now and at every login. If an
+older kb serve is still running in a terminal you can no longer find, it stops that one first. It
 needs no sudo, runs as you, and still listens on `127.0.0.1` only. After you update kb, run `kb serve --install`
 again so it starts the new version. `kb serve --uninstall` takes it away; if the page does not open, see why with
 `journalctl --user -u kb-serve.service -n 30`.
@@ -668,8 +669,9 @@ kb where --find "reverse engineering"
 ```
 
 It is off until you press **Show where I was**. kb reads it fresh on the laptop each time, from what is already
-there: the history file of Chrome, Chromium, Brave, Edge, Vivaldi, Opera or Firefox (copied first, as the browser
-keeps it locked), the desktop's list of files you opened, and the dates on the files in your home folder (hidden
+there: the history file of Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Firefox, Zen, LibreWolf or another
+browser built on them, wherever it keeps it (snap, flatpak or its own folder; copied first, as the browser keeps it
+locked), the desktop's list of files you opened, and the dates on the files in your home folder (hidden
 folders, caches and code environments are skipped). It keeps none of it, sends none of it anywhere and shows none of
 it to a model. Addresses lose the parts that look like keys (`token=`, `code=`, `key=` and the like) before they are
 shown. **Stop showing where I was** turns it off again.

@@ -152,6 +152,67 @@ def _copy_read(db: Path, sql: str, args: tuple) -> list[tuple]:
             con.close()
 
 
+# Where else kb looks when a browser is not in the lists above: snap and flatpak installs (Brave, Chromium, Opera
+# from the Snap Store), and browsers that keep their own folder (Zen, LibreWolf, Floorp, Waterfox, Yandex ...).
+LOOK_IN = (".config", "snap", ".var/app", ".local/share")
+NOT_BROWSERS = {".cache", ".local", ".config", ".var", ".npm", ".cargo", ".rustup", ".nvm", ".pyenv", ".conda", ".ollama",
+                ".docker", ".gradle", ".m2", ".vscode", ".vscode-server", ".cursor", ".git", ".gnupg", ".ssh", ".steam",
+                ".wine", ".java", ".android", ".pki", ".icons", ".themes", ".fonts", ".kb"}
+HEAVY = {"Cache", "Code Cache", "GPUCache", "Service Worker", "IndexedDB", "Extensions", "File System", "blob_storage",
+         "cache2", "storage", "node_modules", "__pycache__", "site-packages", "Crashpad", "ShaderCache", "GrShaderCache",
+         "optimization_guide_model_store", "Safe Browsing", "WidevineCdm", "Dictionaries", "component_crx_cache"}
+NAMES = (("brave", "Brave"), ("vivaldi", "Vivaldi"), ("opera", "Opera"), ("edge", "Edge"), ("yandex", "Yandex"),
+         ("thorium", "Thorium"), ("chromium", "Chromium"), ("chrome", "Chrome"), ("librewolf", "LibreWolf"),
+         ("floorp", "Floorp"), ("waterfox", "Waterfox"), ("zen", "Zen"), ("firefox", "Firefox"), ("mozilla", "Firefox"))
+
+
+def _sqlite(path: Path) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
+
+
+def _name(path: Path, home: Path) -> str:
+    rel = path.relative_to(home)
+    low = str(rel).lower()
+    name = next((n for k, n in NAMES if k in low), rel.parts[0].lstrip(".") or "browser")
+    prof = path.parent.name
+    return f"{name} ({prof})" if prof.startswith("Profile ") else name
+
+
+def find_histories(home: Path, budget: float = 2.0, max_seen: int = 200_000) -> list[tuple[str, Path, str]]:
+    """Every browser history file in your home folder's hidden places, wherever the browser keeps it."""
+    roots = [home / x for x in LOOK_IN]
+    try:
+        roots += [e for e in home.iterdir() if e.name.startswith(".") and e.name not in NOT_BROWSERS and e.is_dir()
+                  and not e.is_symlink()]
+    except OSError:
+        pass
+    t0, seen, out = time.monotonic(), 0, []
+    stack = [(r, 0) for r in roots if r.is_dir()]
+    while stack and seen < max_seen and time.monotonic() - t0 < budget:
+        top, depth = stack.pop()
+        try:
+            entries = list(os.scandir(top))
+        except OSError:
+            continue
+        for e in entries:
+            seen += 1
+            try:
+                if e.is_dir(follow_symlinks=False):
+                    if depth < 8 and e.name not in HEAVY:
+                        stack.append((Path(e.path), depth + 1))
+                elif e.is_file(follow_symlinks=False) and e.name in ("History", "places.sqlite"):
+                    path = Path(e.path)
+                    if _sqlite(path):
+                        out.append((_name(path, home), path, "chrome" if e.name == "History" else "firefox"))
+            except OSError:
+                continue
+    return out
+
+
 def history_files(home: Path) -> list[tuple[str, Path, str]]:
     """(browser, history file, "chrome" or "firefox") for every profile found."""
     out = []
@@ -169,6 +230,11 @@ def history_files(home: Path) -> list[tuple[str, Path, str]]:
         if base.is_dir():
             for p in sorted(base.glob("*/places.sqlite")):
                 out.append(("Firefox", p, "firefox"))
+    have = {os.path.realpath(p) for _, p, _ in out}
+    for name, p, kind in find_histories(home):
+        if os.path.realpath(p) not in have:
+            have.add(os.path.realpath(p))
+            out.append((name, p, kind))
     return out
 
 

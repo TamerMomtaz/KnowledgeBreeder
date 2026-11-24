@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import socket
 import subprocess
 import threading
 import time
@@ -209,3 +210,56 @@ def test_kb_serve_starts_by_itself(tmp_path, monkeypatch, capsys):
     a = seen["args"]
     assert seen["port"] == 8800 and a[:4] == ["--port", "8800", "--lang", "en"]
     assert a[a.index("--file") + 1] == str(tmp_path / "work" / "picture.json") and capsys.readouterr().out == "done\n"
+
+
+def test_install_stops_a_kb_serve_left_in_a_window_you_cannot_find(tmp_path, monkeypatch):
+    proc = tmp_path / "proc"
+
+    def p(pid, *args):
+        d = proc / str(pid)
+        d.mkdir(parents=True)
+        (d / "cmdline").write_bytes(b"\0".join(a.encode() for a in args) + b"\0")
+    p(101, "/home/tee/KnowledgeBreeder/.venv/bin/python3", "/home/tee/KnowledgeBreeder/.venv/bin/kb", "serve", "--open")
+    p(102, "/usr/bin/python3", "-m", "knowledgebreeder.cli", "serve")
+    p(103, "/usr/bin/python3", "-m", "http.server", "8765")                  # not kb: left alone
+    p(104, "/home/tee/KnowledgeBreeder/.venv/bin/kb", "serve", "--install")  # this very command
+    p(105, "bash")
+    (proc / "self").mkdir()
+    assert autostart.old_serves(proc) == [101, 102]
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen()
+    port = sock.getsockname()[1]
+    killed = []
+
+    def kill(pid, sig):
+        killed.append(pid)
+        sock.close()                                       # the old kb serve lets go of the port
+    assert autostart.stop_old(port, proc, kill=kill) == [101, 102] and killed == [101, 102]
+    assert autostart.port_free(port)
+
+    asked = []
+
+    def systemctl(cmd):                                    # not running before the install, running after it
+        if "is-active" in cmd:
+            asked.append(1)
+        state = "active\n" if ok and len(asked) > 1 else "inactive\n"
+        return subprocess.CompletedProcess(cmd, 0, state if "is-active" in cmd else "", "")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
+    busy = socket.socket()
+    busy.bind(("127.0.0.1", 0))
+    busy.listen()
+    port = busy.getsockname()[1]
+    ok = False
+    with pytest.raises(KeyError, match=f"fuser -k {port}/tcp"):           # nothing of kb's holds it: say how to free it
+        autostart.install([], port, workdir=tmp_path, run=systemctl, stop=lambda port: [])
+
+    def stop(port):
+        busy.close()
+        return [101]
+    ok = True
+    asked.clear()
+    lines = autostart.install([], port, workdir=tmp_path, run=systemctl, stop=stop)
+    assert lines[0] == "Stopped the kb serve that was still running in another window."
+    assert lines[1].startswith("kb now starts by itself")
