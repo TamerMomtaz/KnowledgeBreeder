@@ -616,6 +616,31 @@ kb scout read work/inbox/text
 A send can be up to 20 MB a file. Nothing in the inbox leaves the laptop, unless you run the scout with a model you
 `--allow` for that run.
 
+#### Without a terminal
+
+The page has an **Ask kb** box, so the daily jobs need no commands:
+
+- **Ask for advice** runs `kb picture advise` with every model on this laptop, your private list and your lessons.
+- **Find chances in my inbox** runs the scout on what kb read from your inbox.
+- **Add cards from a file** merges the PROJECT CARDs in a file you pick, as `kb picture add` does: nothing is
+  overwritten, and a copy of the file is kept in `work/cards`, so kb can say where each card came from.
+- **Check my picture** and **See chances** show `kb picture check` and the open chances as pages.
+
+Each button runs the very command you would type, as a separate process on the laptop, so every rule stays the same.
+The page never passes `--allow`: it asks models on this laptop only, never one on another machine or a key. One job
+runs at a time; you can leave the page while it works, and it shows the result in one sentence when you come back.
+
+To have the page there whenever you log in, without a terminal window, run once:
+
+```bash
+kb serve --install
+```
+
+It writes one small file, `~/.config/systemd/user/kb-serve.service`, and starts kb serve now and at every login. It
+needs no sudo, runs as you, and still listens on `127.0.0.1` only. After you update kb, run `kb serve --install`
+again so it starts the new version. `kb serve --uninstall` takes it away; if the page does not open, see why with
+`journalctl --user -u kb-serve.service -n 30`.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:
@@ -705,8 +730,8 @@ writer. `--json` gives the register and the findings as data.
   (text drawn as outlines, hatching, symbols made of many strokes). It ignores curved pipes and does nothing for scans.
 - The vector reader is not yet wired into the seed's extraction step. That is the first candidate in
   `breeding/candidates.md`, and it must earn its place with a score.
-- `kb serve` serves while its terminal is open; it is not a background service. The phone reaches it only while the
-  laptop is on and awake. Its safety rests on staying on `127.0.0.1`, with Tailscale as the only way in.
+- `kb serve` runs while you are logged in to the laptop (after `kb serve --install`), or while its terminal is open.
+  The phone reaches it only while the laptop is on and awake. Its safety rests on staying on `127.0.0.1`, with Tailscale as the only way in.
 - The inbox reads text, links, PDFs with a text layer, and .docx and .pptx files. It does not yet read screenshots,
   scans or voice: those wait, kept whole, for a reader that runs on the laptop. It does not read .doc, .xls or
   .xlsx files, and a share from another app needs the page open (there is no share button into kb yet).

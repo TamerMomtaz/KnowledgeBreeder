@@ -96,7 +96,7 @@ def ask(kb, method, path, body=None, headers=None, host=None):
 def test_the_server_answers_only_on_this_machine_and_to_its_own_names(served):
     kb, run_id, _ = served
     code, head, doc = ask(kb, "GET", "/")
-    assert code == 200 and "Your advice runs" in doc and run_id in doc and "small, big" in doc and "not rated yet" in doc
+    assert code == 200 and "<h1>Your kb</h1>" in doc and run_id in doc and "small, big" in doc and "not rated yet" in doc
     assert "connect-src 'self'" in head["Content-Security-Policy"] and "frame-ancestors 'none'" in head["Content-Security-Policy"]
     assert head["X-Frame-Options"] == "DENY" and head["Cache-Control"] == "no-store" and head["Referrer-Policy"] == "no-referrer"
     assert not re.search(r"""(?:src|href)\s*=\s*["']?(?:https?:)?//""", doc)     # nothing fetched from outside
@@ -171,7 +171,7 @@ def test_serve_without_a_run_log_says_what_to_do(tmp_path):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         code, _, doc = ask(kb, "GET", "/")
-        assert code == 200 and "No advice run yet. Make one on the laptop with: kb picture advise" in doc
+        assert code == 200 and "No advice run yet. Press Ask for advice." in doc and 'id="ask"' in doc
         assert ask(kb, "POST", "/api/rate", {"run": "run_x", "pieces": []})[0] == 404
         assert not Path(tmp_path / "none.db").exists()                               # looking creates nothing
     finally:
