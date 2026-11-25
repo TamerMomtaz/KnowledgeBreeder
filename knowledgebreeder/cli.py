@@ -735,6 +735,7 @@ def _serve(a, dump) -> int:
     if a.open:
         import webbrowser
         webbrowser.open(url)
+    kb.start_nudges()          # phone reminders, if you turned them on in the page; nothing goes while they are off
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

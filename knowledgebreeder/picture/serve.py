@@ -27,17 +27,20 @@ import sys
 import threading
 import time
 import traceback
-from datetime import date
+from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 
 from .. import theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, engines, icon, page, rating
+from . import actions, engines, icon, nudge, page, rating
 from . import inbox as inb
 from . import lessons as les
+from . import private as prv
+from . import soon as soon_mod
 
 MAX_BODY = 64_000
 MAX_INBOX_BODY = 30_000_000          # up to ten files a send, each up to inbox.MAX_FILE, sent as base64
@@ -119,6 +122,28 @@ LABELS = {
         "shared": "Shared to kb. Add a few words if you like, then press Send to kb.",
         "share_again": "kb was not ready for that share. Open kb once on this phone, then share again.",
         "app_desc": "Your kb: send it posts, links, screenshots, files and voice notes from any app.",
+        "soon_h": "Coming up",
+        "soon_note": "Dates written on your cards and the deadlines of open chances, nearest first. kb guesses none of them.",
+        "soon_missed": "Slipped, {when}, and still open", "soon_due": "Due {when}", "soon_on": "{when}",
+        "soon_chance": "A chance from your inbox, closes {when}", "soon_who": "Waits on {who}.",
+        "soon_you": "Waits on you.",
+        "nudge_h": "Reminders on your phone",
+        "nudge_note": "kb sends your phone a morning note (what is close, what slipped, what waits on you) and a reminder "
+                      "the day before and on the day of each deadline. They go through ntfy, a free notification app. "
+                      "Only short lines leave this laptop, and anything private is cut down to its card's name. ntfy "
+                      "keeps each note on its server for up to 12 hours. The laptop must be on.",
+        "nudge_on": "Turn on phone reminders", "nudge_off": "Turn off phone reminders", "nudge_test": "Send a test now",
+        "nudge_s1": "Install the free ntfy app on your phone (Google Play, F-Droid or the App Store).",
+        "nudge_s2": "Subscribe to your topic. On Android, open this page on the phone and press Subscribe on the phone. "
+                    "On an iPhone, press + in the app and type the topic below.",
+        "nudge_s3": "Press Send a test now. A note arrives in a few seconds.",
+        "nudge_sub": "Subscribe on the phone",
+        "nudge_topic": "Your topic. Keep it to yourself: anyone who has it can read the notes.",
+        "nudge_when": "Morning note: once a day, between 8:00 and 14:00. Deadline reminders: the day before and on the "
+                      "day, between 8:00 and 22:00. Nothing at night.",
+        "nudge_last": "Last sent: {last}", "nudge_none": "Nothing sent yet.",
+        "nudge_err": "The last try failed: {e}. kb tries again in five minutes.",
+        "nudge_sent": "Sent. Look at your phone.", "nudge_first": "Turn phone reminders on first.",
         "eng_h": "Where your work waits",
         "eng_note": "Worked out from your cards on this laptop, with no model: what waits on whom, and how long things "
                     "wait. The math comes from your research Mathematical Engines of Plan→T.",
@@ -210,6 +235,28 @@ LABELS = {
         "shared": "وصلت المشاركة إلى kb. أضف كلمات إن شئت، ثم اضغط أرسل إلى kb.",
         "share_again": "لم يكن kb جاهزًا لهذه المشاركة. افتح kb مرة على هذا الهاتف، ثم شارك مرة أخرى.",
         "app_desc": "kb الخاص بك: أرسل إليه المنشورات والروابط ولقطات الشاشة والملفات والرسائل الصوتية من أي تطبيق.",
+        "soon_h": "قريبًا",
+        "soon_note": "تواريخ مكتوبة على بطاقاتك ومواعيد الفرص المفتوحة، الأقرب أولًا. لا يخمّن kb أيًّا منها.",
+        "soon_missed": "فات موعده {when} وما زال مفتوحًا", "soon_due": "موعده {when}", "soon_on": "{when}",
+        "soon_chance": "فرصة من صندوقك، تُغلق {when}", "soon_who": "ينتظر: {who}.",
+        "soon_you": "ينتظرك أنت.",
+        "nudge_h": "تذكيرات على هاتفك",
+        "nudge_note": "يرسل kb إلى هاتفك رسالة صباحية (ما اقترب، وما فات موعده، وما ينتظرك) وتذكيرًا قبل كل موعد نهائي "
+                      "بيوم وفي يومه. تصل عبر ntfy، وهو تطبيق إشعارات مجاني. لا يخرج من هذا اللابتوب إلا سطور قصيرة، "
+                      "وكل ما هو خاص يُختصر إلى اسم بطاقته. يحتفظ ntfy بكل رسالة على خادمه حتى 12 ساعة. يجب أن يكون "
+                      "اللابتوب يعمل.",
+        "nudge_on": "شغّل تذكيرات الهاتف", "nudge_off": "أوقف تذكيرات الهاتف", "nudge_test": "أرسل تجربة الآن",
+        "nudge_s1": "ثبّت تطبيق ntfy المجاني على هاتفك (\u2068Google Play\u2069 أو \u2068F-Droid\u2069 أو \u2068App Store\u2069).",
+        "nudge_s2": "اشترك في موضوعك. على أندرويد، افتح هذه الصفحة على الهاتف واضغط «اشترك على الهاتف». على آيفون، "
+                    "اضغط + في التطبيق واكتب الموضوع أدناه.",
+        "nudge_s3": "اضغط «أرسل تجربة الآن». تصل رسالة خلال ثوانٍ.",
+        "nudge_sub": "اشترك على الهاتف",
+        "nudge_topic": "موضوعك. احتفظ به لنفسك: من يعرفه يستطيع قراءة الرسائل.",
+        "nudge_when": "الرسالة الصباحية: مرة في اليوم بين 8:00 و14:00. تذكيرات المواعيد: قبل الموعد بيوم وفي يومه، بين "
+                      "8:00 و22:00. لا شيء ليلًا.",
+        "nudge_last": "آخر إرسال: {last}", "nudge_none": "لم يُرسل شيء بعد.",
+        "nudge_err": "فشلت المحاولة الأخيرة: {e}. يحاول kb مرة أخرى بعد خمس دقائق.",
+        "nudge_sent": "أُرسلت. انظر إلى هاتفك.", "nudge_first": "شغّل تذكيرات الهاتف أولًا.",
         "eng_h": "أين ينتظر عملك",
         "eng_note": "محسوب من بطاقاتك على هذا اللابتوب، دون أي نموذج: ما ينتظر مَن، وكم تنتظر الأشياء. الحساب مأخوذ من "
                     "بحثك Mathematical Engines of Plan→T.",
@@ -346,6 +393,9 @@ footer{color:var(--soft);font-size:.86rem;margin-top:20px}
 .acts{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:12px 0 4px}
 .acts button{width:100%}
 .ask p{overflow-wrap:anywhere}
+.nudge .topic code{display:block;overflow-wrap:anywhere;user-select:all;font-size:.95rem}
+.nudge .steps{padding-inline-start:22px}
+.nudge .steps li{margin:0 0 6px}
 .links{display:flex;flex-wrap:wrap;gap:0 18px;margin-top:8px}
 .links a{color:var(--accent);font-weight:600;min-height:44px;display:inline-flex;align-items:center}
 #job{margin:10px 0 0;min-height:1.5em;overflow-wrap:anywhere}
@@ -375,6 +425,9 @@ ol.md li,ul.md li{margin:0 0 12px;overflow-wrap:anywhere}
 .days a{color:var(--accent);min-height:44px;display:inline-flex;align-items:center}
 .days a[aria-current]{color:var(--ink);font-weight:700;text-decoration:none}
 .eng h3{font-size:1.02rem;margin:16px 0 4px}
+.soon li.missed .when{color:var(--warn);font-weight:700}
+.soon li.deadline .when{font-weight:700}
+.soon .c{display:block;font-weight:700}
 .eng .lead{font-weight:700}
 input[type=search]{width:100%;min-height:46px;background:var(--bg);color:inherit;border:1px solid var(--line);border-radius:10px;padding:0 12px;font:inherit}
 """
@@ -455,16 +508,38 @@ if (ask){
   if (ask.getAttribute("data-running") === "1"){ jobLock(true); jobPoll(); }
 }
 
+function again(part){             // load the page again at a box; a change of the #part alone would not reload it
+  var u = "/?lang=" + L.lang;
+  if (location.pathname + location.search === u){ history.replaceState(null, "", u + part); location.reload(); }
+  else location.replace(u + part);
+}
 var won = document.getElementById("where-on");
 if (won){
   won.addEventListener("click", function(){
     won.disabled = true; won.textContent = L.saving;
     fetch("/api/where", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify({on: true})})
-      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); location.replace("/?lang=" + L.lang + "#where"); }); })
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); again("#where"); }); })
       .catch(function(e){ won.disabled = false; won.textContent = L.where_on;
         var ws = document.getElementById("where-say"); ws.textContent = L.not_saved.replace("{e}", e.message); ws.className = "err"; });
   });
 }
+
+var nsay = document.getElementById("nudge-say");
+function nudgeDo(b, what){
+  var was = b.textContent;
+  b.disabled = true; b.textContent = what === "test" ? L.sending : L.saving;
+  fetch("/api/nudge", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"}, body: JSON.stringify({do: what, lang: L.lang})})
+    .then(function(r){ return r.json().then(function(j){
+      if (!r.ok) throw new Error(j.error || "?");
+      if (what !== "test") return again("#nudge");
+      b.disabled = false; b.textContent = was; nsay.textContent = j.say; nsay.className = "kept";
+    }); })
+    .catch(function(e){ b.disabled = false; b.textContent = was; nsay.textContent = e.message; nsay.className = "err"; });
+}
+[["nudge-on", "on"], ["nudge-off", "off"], ["nudge-test", "test"]].forEach(function(p){
+  var b = document.getElementById(p[0]);
+  if (b) b.addEventListener("click", function(){ nudgeDo(b, p[1]); });
+});
 
 var post = document.getElementById("post");
 if (!post) return;
@@ -790,6 +865,58 @@ def where_box(lang: str, on: bool, data: dict | None, problem: str | None = None
             f'<div class="links"><a href="/where?lang={lang}">{_e(_t(lang, "where_all"))}</a></div></section>')
 
 
+def soon_box(lang: str, rows: list[dict], show: int = 8) -> str:
+    """Coming up, first on the page: what slipped and what is close. Nothing when no date is close."""
+    if not rows:
+        return ""
+    out = []
+    for x in rows[:show]:
+        d = date.fromisoformat(x["when"])
+        day = (f'{d.day}/{d.month}' if lang == "ar" else f'{d:%a} {d.day} {d:%b}')
+        when = soon_mod.when_words(x["days"], lang)
+        head = {"missed": "soon_missed", "deadline": "soon_due", "date": "soon_on", "chance": "soon_chance"}[x["kind"]]
+        who, m = "", engines.YOU.match(x["who"] or "")
+        if m and not x["who"][m.end():].strip():
+            who = _e(_t(lang, "soon_you"))
+        elif x["who"]:                                    # the name isolated, so Arabic and English sit right
+            name = "you" + x["who"][m.end():] if m and lang == "en" else x["who"]
+            pre, post = LABELS[lang]["soon_who"].split("{who}")
+            who = f'{_e(pre)}<bdi>{_e(name)}</bdi>{_e(post)}'
+        card = f'<span class="c"><bdi>{_e(x["card"])}</bdi></span>' if x["card"] else ""
+        out.append(f'<li class="{_e(x["kind"])}">{card}<bdi>{_e(x["what"])}</bdi>'
+                   f'<span class="more"><span class="when">{_e(_t(lang, head, when=when))} · {_e(day)}</span>'
+                   f'{(" " + who) if who else ""}</span></li>')
+    return (f'<section class="box soon" id="soon"><h2>{_e(_t(lang, "soon_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "soon_note"))}</p><ul class="md">{"".join(out)}</ul></section>')
+
+
+def nudge_box(lang: str, s: dict) -> str:
+    """Reminders on your phone: off until you press the button, then the steps for the phone and a test button."""
+    head = (f'<section class="box nudge" id="nudge"><h2>{_e(_t(lang, "nudge_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "nudge_note"))}</p>')
+    say = '<span id="nudge-say" role="status"></span>'
+    if not s.get("on") or not s.get("topic"):
+        return (head + f'<div class="row"><button type="button" class="act alt" id="nudge-on">'
+                f'{_e(_t(lang, "nudge_on"))}</button>{say}</div></section>')
+    host = urlsplit(s["server"]).netloc or "ntfy.sh"
+    sub = f'ntfy://{host}/{s["topic"]}?display=kb'
+    steps = (f'<ol class="md steps"><li>{_e(_t(lang, "nudge_s1"))}</li>'
+             f'<li>{_e(_t(lang, "nudge_s2"))} <a href="{_e(sub)}">{_e(_t(lang, "nudge_sub"))}</a></li>'
+             f'<li>{_e(_t(lang, "nudge_s3"))}</li></ol>')
+    topic = (f'<p class="soft small">{_e(_t(lang, "nudge_topic"))}</p>'
+             f'<p class="topic"><code dir="ltr">{_e(s["topic"])}</code></p>')
+    if s.get("error"):
+        state = f'<p class="err small"><bdi>{_e(_t(lang, "nudge_err", e=s["error"]))}</bdi></p>'
+    elif s.get("last"):
+        state = f'<p class="soft small"><bdi>{_e(_t(lang, "nudge_last", last=s["last"]))}</bdi></p>'
+    else:
+        state = f'<p class="soft small">{_e(_t(lang, "nudge_none"))}</p>'
+    return (head + steps + topic + f'<p class="soft small">{_e(_t(lang, "nudge_when"))}</p>' + state +
+            f'<div class="acts"><button type="button" class="act" id="nudge-test">{_e(_t(lang, "nudge_test"))}</button>'
+            f'<button type="button" class="act alt" id="nudge-off">{_e(_t(lang, "nudge_off"))}</button></div>'
+            f'<div class="row">{say}</div></section>')
+
+
 def waits_box(lang: str, r: dict | None, problem: str | None = None) -> str:
     """Where your work waits: what frees the most, and how long things wait. Worked out from the cards, no model."""
     head = (f'<section class="box eng" id="waits"><h2>{_e(_t(lang, "eng_h"))}</h2>'
@@ -933,7 +1060,8 @@ def manifest(lang: str) -> dict:
 
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
-          ask: str | None = None, where: str | None = None, waits: str | None = None) -> str:
+          ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None,
+          nudges: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -971,9 +1099,10 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main, side = inbox_html(box, lang, got) + (waits or "") + (where or ""), (ask or "") + runs_box + lessons_box
+        main = (soon or "") + inbox_html(box, lang, got) + (waits or "") + (where or "")
+        side = (ask or "") + (nudges or "") + runs_box + lessons_box
     else:
-        main, side = runs_box + (waits or "") + (where or ""), (ask or "") + lessons_box
+        main, side = (soon or "") + runs_box + (waits or "") + (where or ""), (ask or "") + (nudges or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -1015,6 +1144,9 @@ class Kb:
         self.where_paths: set[str] = set()
         self._waits: tuple | None = None
         self.cards_said: tuple[float, dict] | None = None     # when the page last added a cards file, and what it found
+        self.nudge = nudge.Nudge(work / "nudge.json")
+        self.nudge_post = nudge._post                           # tests put a stand-in here; nothing leaves then
+        self.nudge_lock = threading.Lock()
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
@@ -1075,6 +1207,61 @@ class Kb:
         r = engines.run(Picture.load(self.picture), today)
         self._waits = (key, r)
         return r
+
+    def soon(self, today: date | None = None) -> list[dict]:
+        """Coming up: dates on the cards and deadlines of open chances. Empty while there is no picture."""
+        from . import Picture
+        if not self.picture.exists():
+            return []
+        today = today or self.today or date.today()
+        chances = []
+        if self.ledger.exists():
+            from .. import scout
+            chances = scout.open_now(scout.Ledger(self.ledger).rows(), today)
+        return soon_mod.coming(Picture.load(self.picture).cards, today, chances)
+
+    def soon_html(self, lang: str) -> str:
+        try:
+            rows = self.soon()
+        except (ValueError, KeyError, OSError):
+            traceback.print_exc()
+            return ""
+        return soon_box(lang, rows)
+
+    def nudge_html(self, lang: str) -> str:
+        return nudge_box(lang, self.nudge.state())
+
+    def nudge_guard(self) -> prv.Private:
+        """Your private list, with the names of cards marked #private, as the advice page uses it."""
+        from . import Picture
+        from .advise import guard_for
+        g = prv.Private.load(self.private)
+        return guard_for(Picture.load(self.picture), g) if self.picture.exists() else g
+
+    def nudge_tick(self, now: datetime | None = None) -> list[str]:
+        """Send what is due now, once. Nothing happens while reminders are off."""
+        with self.nudge_lock:
+            if not self.nudge.state()["on"]:
+                return []
+            try:
+                waits = self.waits()
+            except (ValueError, KeyError, OSError):
+                waits = None
+            now = now or datetime.now()
+            return self.nudge.tick(now, self.soon(now.date()), waits, self.nudge_guard(), post=self.nudge_post)
+
+    def start_nudges(self, every: float = 300) -> threading.Thread:
+        """Check every five minutes, while kb serve runs, whether a reminder is due."""
+        def loop():
+            while True:
+                try:
+                    self.nudge_tick()
+                except Exception:                     # noqa: BLE001 - a reminder that fails must not stop the page
+                    traceback.print_exc()
+                time.sleep(every)
+        t = threading.Thread(target=loop, name="kb-nudge", daemon=True)
+        t.start()
+        return t
 
     def waits_html(self, lang: str) -> str:
         """The box, or nothing while there are no cards: the Ask kb box already says how to add them."""
@@ -1147,13 +1334,15 @@ class Handler(BaseHTTPRequestHandler):
         path, lang = urlsplit(self.path).path, self._lang()
         try:
             if path == "/":
+                self._remember_page()
                 log = self.kb.log()
                 try:
                     q = parse_qs(urlsplit(self.path).query)
                     got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again", "cards") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
-                                 where=self.kb.where_html(lang), waits=self.kb.waits_html(lang))
+                                 where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
+                                 soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang))
                 finally:
                     if log:
                         log.close()
@@ -1243,6 +1432,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/where":
                 self.kb.set_where(body.get("on") is True)
                 return self._json(200, {"ok": True, "on": self.kb.where_on()})
+            if path == "/api/nudge":
+                return self._json(200, {"ok": True, **self._nudge(body)})
             if path == "/api/where/keep":
                 return self._json(200, {"ok": True, **self._keep(body)})
             if path not in ("/api/rate", "/api/pick"):
@@ -1328,6 +1519,35 @@ class Handler(BaseHTTPRequestHandler):
             return doc_page(lang, title, f'<section class="box"><p>{_e(_t(lang, "no_chances_yet"))}</p></section>')
         return doc_page(lang, title, actions.md_html(scout.log_md(rows, self.kb.today), _e),
                         _t(lang, "en_only") if lang != "en" else None)
+
+    def _remember_page(self) -> None:
+        """While reminders are on, keep the tailnet address the phone uses, so a tap on a note opens kb."""
+        host = (self.headers.get("Host") or "").lower().split(":")[0].rstrip(".")
+        if host.endswith(".ts.net"):
+            with self.kb.nudge_lock:
+                if self.kb.nudge.state()["on"]:
+                    self.kb.nudge.remember_page(f"https://{host}/")
+
+    def _nudge(self, body: dict) -> dict:
+        """Turn the phone reminders on or off, or send a test note."""
+        do = body.get("do")
+        lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+        if do in ("on", "off"):
+            with self.kb.nudge_lock:
+                s = self.kb.nudge.turn(do == "on", lang)
+            return {"on": s["on"]}
+        if do != "test":
+            raise KeyError("do must be on, off or test.")
+        with self.kb.nudge_lock:
+            s = self.kb.nudge.state()
+        if not s["on"] or not s["topic"]:
+            raise KeyError(_t(lang, "nudge_first"))
+        say = nudge.SAY[lang if lang in nudge.SAY else "en"]
+        try:
+            self.kb.nudge.send(say["test"], say["test_body"], s, 3, "wave", post=self.kb.nudge_post)
+        except (URLError, OSError, ValueError) as e:
+            raise KeyError(f"ntfy did not take it: {type(e).__name__}: {getattr(e, 'reason', e)}") from None
+        return {"say": _t(lang, "nudge_sent")}
 
     def _keep(self, body: dict) -> dict:
         """A page or a file from Where you were, kept in the inbox: a page as its title and address, a file as a copy.
