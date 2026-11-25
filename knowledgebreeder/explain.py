@@ -95,6 +95,16 @@ TEXT = {
                             ("nudge_test", "Sends one note, to check that your phone gets it."),
                             ("nudge_off", "Stops every note. Your topic is kept for next time.")],
             },
+            "ideas": {
+                "what": "One ledger of every idea, lesson, check and book principle kb has read: from your cards, and "
+                        "from the journey and KB thinks files you added. Each line says where it came from.",
+                "how": "Answer the oldest lines first. Your answers teach kb what to bring back, and the two numbers "
+                       "at the top say whether its ideas are helping you. To add a file, use Add cards from a file: a "
+                       "file with no cards in it is kept as ideas.",
+                "buttons": [("i_useful", "Keeps the line under Useful, so kb brings it back."),
+                            ("i_later", "Moves it out of the way for now."),
+                            ("i_done", "You applied it. It counts in Done in 30 days.")],
+            },
             "grow": {
                 "what": "kb's own to-do list, taken from your cards: what is unfinished on kb's card, and the parts and "
                         "ideas on other cards that name kb.",
@@ -191,6 +201,15 @@ TEXT = {
                 "buttons": [("nudge_on", "ينشئ موضوعك الخاص ويبدأ التذكيرات."),
                             ("nudge_test", "يرسل رسالة واحدة لتتأكد أن هاتفك يستقبلها."),
                             ("nudge_off", "يوقف كل الرسائل. يبقى موضوعك محفوظًا للمرة القادمة.")],
+            },
+            "ideas": {
+                "what": "سجل واحد لكل فكرة ودرس وفحص ومبدأ من كتاب قرأه kb: من بطاقاتك، ومن ملفات الرحلة وملفات «KB "
+                        "يفكر» التي أضفتها. كل سطر يذكر مصدره.",
+                "how": "أجب عن الأسطر الأقدم أولًا. إجاباتك تعلّم kb ما يعيده إليك، والرقمان في الأعلى يقولان هل أفكاره "
+                       "تساعدك. لإضافة ملف استخدم «أضف بطاقات من ملف»: الملف الذي لا بطاقات فيه يُحفظ أفكارًا.",
+                "buttons": [("i_useful", "يحفظ السطر تحت «مفيد» ليعيده kb إليك."),
+                            ("i_later", "يبعده عن الطريق الآن."),
+                            ("i_done", "طبّقته. يُحسب في «تم في 30 يومًا».")],
             },
             "grow": {
                 "what": "قائمة مهام kb نفسه، مأخوذة من بطاقاتك: ما لم ينتهِ على بطاقة kb، والأجزاء والأفكار على البطاقات "
