@@ -36,7 +36,7 @@ from urllib.parse import parse_qs, urlsplit
 from .. import explain, margins, theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, engines, icon, nudge, page, rating
+from . import actions, engines, grow, icon, nudge, page, rating
 from . import inbox as inb
 from . import lessons as les
 from . import private as prv
@@ -144,6 +144,20 @@ LABELS = {
         "nudge_last": "Last sent: {last}", "nudge_none": "Nothing sent yet.",
         "nudge_err": "The last try failed: {e}. kb tries again in five minutes.",
         "nudge_sent": "Sent. Look at your phone.", "nudge_first": "Turn phone reminders on first.",
+        "grow_h": "kb grows from your cards",
+        "grow_note": "Lines on your cards that would make kb itself better: kb's own card, and the parts and ideas on "
+                     "other cards that name kb. Say which to build; the build list is what gets built next.",
+        "grow_build_h": "To build ({n})", "grow_new_h": "New from your cards ({n})", "grow_all": "See all {n} new lines",
+        "grow_later_h": "Not now ({n})", "grow_done": "Done: {n}.",
+        "grow_none": "No line on your cards names kb yet. Write kb or KnowledgeBreeder in a part or an idea on a card, "
+                     "and add the cards again.",
+        "grow_no_build": "Nothing on the build list yet. Press Build this on a line below.",
+        "g_build": "Build this", "g_later": "Not now", "g_done": "Done", "g_copy": "Copy the build list",
+        "g_copied": "Copied. Paste it into your chat with Claude to have it built.",
+        "g_copy_fail": "Could not copy. Select the text below and copy it.",
+        "g_intro": "Build these into KnowledgeBreeder (kb). They come from my cards:", "g_from": "from",
+        "g_k_unfinished": "unfinished on kb", "g_k_need": "kb needs", "g_k_decision": "open decision on kb",
+        "g_k_idea": "idea", "g_k_part": "part to reuse",
         "eng_h": "Where your work waits",
         "eng_note": "Worked out from your cards on this laptop, with no model: what waits on whom, and how long things "
                     "wait. The math comes from your research Mathematical Engines of Plan→T.",
@@ -257,6 +271,20 @@ LABELS = {
         "nudge_last": "آخر إرسال: {last}", "nudge_none": "لم يُرسل شيء بعد.",
         "nudge_err": "فشلت المحاولة الأخيرة: {e}. يحاول kb مرة أخرى بعد خمس دقائق.",
         "nudge_sent": "أُرسلت. انظر إلى هاتفك.", "nudge_first": "شغّل تذكيرات الهاتف أولًا.",
+        "grow_h": "kb ينمو من بطاقاتك",
+        "grow_note": "سطور على بطاقاتك تجعل kb نفسه أفضل: بطاقة kb نفسها، والأجزاء والأفكار على البطاقات الأخرى التي "
+                     "تذكر kb. قل أيها يُبنى؛ قائمة البناء هي ما يُبنى بعد ذلك.",
+        "grow_build_h": "للبناء ({n})", "grow_new_h": "جديد من بطاقاتك ({n})", "grow_all": "اعرض كل السطور الجديدة: {n}",
+        "grow_later_h": "ليس الآن ({n})", "grow_done": "تم: {n}.",
+        "grow_none": "لا يوجد سطر على بطاقاتك يذكر kb بعد. اكتب kb أو KnowledgeBreeder في جزء أو فكرة على بطاقة، وأضف "
+                     "البطاقات مرة أخرى.",
+        "grow_no_build": "لا شيء في قائمة البناء بعد. اضغط «ابنِ هذا» على سطر أدناه.",
+        "g_build": "ابنِ هذا", "g_later": "ليس الآن", "g_done": "تم", "g_copy": "انسخ قائمة البناء",
+        "g_copied": "نُسخت. الصقها في محادثتك مع Claude ليبنيها.",
+        "g_copy_fail": "تعذّر النسخ. حدّد النص أدناه وانسخه.",
+        "g_intro": "ابنِ هذه في KnowledgeBreeder (kb). هي من بطاقاتي:", "g_from": "من",
+        "g_k_unfinished": "غير منتهٍ في kb", "g_k_need": "يحتاجه kb", "g_k_decision": "قرار مفتوح في kb",
+        "g_k_idea": "فكرة", "g_k_part": "جزء يُعاد استخدامه",
         "eng_h": "أين ينتظر عملك",
         "eng_note": "محسوب من بطاقاتك على هذا اللابتوب، دون أي نموذج: ما ينتظر مَن، وكم تنتظر الأشياء. الحساب مأخوذ من "
                     "بحثك Mathematical Engines of Plan→T.",
@@ -393,6 +421,16 @@ footer{color:var(--soft);font-size:.86rem;margin-top:20px}
 .acts{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin:12px 0 4px}
 .acts button{width:100%}
 .ask p{overflow-wrap:anywhere}
+.grow h3{font-size:1rem;margin:14px 0 4px}
+.g-list{list-style:none;margin:0;padding:0}
+.g-list li{border-top:1px solid var(--line);padding:9px 0}
+.g-list .c{display:block;font-weight:700;font-size:.92rem}
+.g-list .why{display:block;color:var(--soft);font-size:.9rem}
+.g-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.g-acts .btn{min-height:40px;padding:0 14px}
+.g-more{margin:8px 0}
+.g-more>summary{cursor:pointer;font-weight:600;min-height:40px;display:flex;align-items:center}
+.g-text{margin-top:8px;font-size:.9rem}
 .nudge .topic code{display:block;overflow-wrap:anywhere;user-select:all;font-size:.95rem}
 .nudge .steps{padding-inline-start:22px}
 .nudge .steps li{margin:0 0 6px}
@@ -540,6 +578,25 @@ function nudgeDo(b, what){
   var b = document.getElementById(p[0]);
   if (b) b.addEventListener("click", function(){ nudgeDo(b, p[1]); });
 });
+
+document.addEventListener("click", function(e){
+  var b = e.target.closest && e.target.closest(".g-act");
+  if (!b) return;
+  b.disabled = true;
+  fetch("/api/grow", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
+                      body: JSON.stringify({id: b.getAttribute("data-id"), state: b.getAttribute("data-state")})})
+    .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); again("#grow"); }); })
+    .catch(function(err){ b.disabled = false; b.title = err.message; });
+});
+var gcopy = document.getElementById("g-copy");
+if (gcopy){
+  gcopy.addEventListener("click", function(){
+    var t = document.getElementById("g-text"), gs = document.getElementById("g-say");
+    function shown(){ t.hidden = false; t.focus(); t.select(); gs.textContent = L.g_copy_fail; gs.className = "err"; }
+    if (!navigator.clipboard){ shown(); return; }
+    navigator.clipboard.writeText(t.value).then(function(){ gs.textContent = L.g_copied; gs.className = "kept"; }, shown);
+  });
+}
 
 var post = document.getElementById("post");
 if (!post) return;
@@ -917,6 +974,47 @@ def nudge_box(lang: str, s: dict) -> str:
             f'<div class="row">{say}</div></section>')
 
 
+def grow_box(lang: str, groups: dict[str, list[dict]] | None, text: str = "", show: int = 5) -> str:
+    """kb grows from your cards: the build list first, then the new lines to answer. Nothing without cards."""
+    if groups is None:
+        return ""
+    head = (f'<section class="box grow" id="grow"><h2>{_e(_t(lang, "grow_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "grow_note"))}</p>')
+    if not any(groups.values()):
+        return head + f'<p class="soft">{_e(_t(lang, "grow_none"))}</p></section>'
+
+    def li(x: dict, acts: tuple[str, ...]) -> str:
+        kind = _t(lang, "g_k_" + x["kind"])
+        why = f'<span class="why"><bdi>{_e(x["why"])}</bdi></span>' if x["why"] else ""
+        btns = "".join(f'<button type="button" class="btn g-act" data-id="{x["id"]}" data-state="{st}">'
+                       f'{_e(_t(lang, "g_" + st))}</button>' for st in acts)
+        return (f'<li><span class="c"><bdi>{_e(x["card"])}</bdi> · {_e(kind)}</span><bdi>{_e(x["what"])}</bdi>{why}'
+                f'<span class="g-acts">{btns}</span></li>')
+
+    out = [head, f'<h3>{_e(_t(lang, "grow_build_h", n=len(groups["build"])))}</h3>']
+    if groups["build"]:
+        out.append(f'<ul class="g-list">{"".join(li(x, ("done", "later")) for x in groups["build"])}</ul>'
+                   f'<div class="row"><button type="button" class="act" id="g-copy">{_e(_t(lang, "g_copy"))}</button>'
+                   f'<span id="g-say" role="status"></span></div>'
+                   f'<textarea id="g-text" class="g-text" readonly hidden rows="6" dir="auto" '
+                   f'aria-label="{_e(_t(lang, "g_copy"))}">{_e(text)}</textarea>')
+    else:
+        out.append(f'<p class="soft small">{_e(_t(lang, "grow_no_build"))}</p>')
+    new = groups["new"]
+    if new:
+        out.append(f'<h3>{_e(_t(lang, "grow_new_h", n=len(new)))}</h3>'
+                   f'<ul class="g-list">{"".join(li(x, ("build", "later")) for x in new[:show])}</ul>')
+        if len(new) > show:
+            out.append(f'<details class="g-more"><summary>{_e(_t(lang, "grow_all", n=len(new)))}</summary>'
+                       f'<ul class="g-list">{"".join(li(x, ("build", "later")) for x in new[show:])}</ul></details>')
+    if groups["later"]:
+        out.append(f'<details class="g-more"><summary>{_e(_t(lang, "grow_later_h", n=len(groups["later"])))}</summary>'
+                   f'<ul class="g-list">{"".join(li(x, ("build",)) for x in groups["later"])}</ul></details>')
+    if groups["done"]:
+        out.append(f'<p class="soft small">{_e(_t(lang, "grow_done", n=len(groups["done"])))}</p>')
+    return "".join(out) + "</section>"
+
+
 def waits_box(lang: str, r: dict | None, problem: str | None = None) -> str:
     """Where your work waits: what frees the most, and how long things wait. Worked out from the cards, no model."""
     head = (f'<section class="box eng" id="waits"><h2>{_e(_t(lang, "eng_h"))}</h2>'
@@ -1061,7 +1159,7 @@ def manifest(lang: str) -> dict:
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
           ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None,
-          nudges: str | None = None) -> str:
+          nudges: str | None = None, grows: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -1087,7 +1185,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
-            "starting", "reading", "where_on", "shared", "share_again")
+            "starting", "reading", "where_on", "shared", "share_again", "g_copied", "g_copy_fail")
     runs_box = f'<section class="box" id="runs"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
     lessons_box = (f'<section class="box" id="lessons"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -1099,10 +1197,11 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main = (soon or "") + inbox_html(box, lang, got) + (waits or "") + (where or "")
+        main = (soon or "") + inbox_html(box, lang, got) + (waits or "") + (grows or "") + (where or "")
         side = (ask or "") + (nudges or "") + runs_box + lessons_box
     else:
-        main, side = (soon or "") + runs_box + (waits or "") + (where or ""), (ask or "") + (nudges or "") + lessons_box
+        main = (soon or "") + runs_box + (waits or "") + (grows or "") + (where or "")
+        side = (ask or "") + (nudges or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     doc = (f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -1151,6 +1250,7 @@ class Kb:
         self.nudge = nudge.Nudge(work / "nudge.json")
         self.nudge_post = nudge._post                           # tests put a stand-in here; nothing leaves then
         self.nudge_lock = threading.Lock()
+        self.grow_marks = grow.Marks(work / "grow.json")
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
@@ -1231,6 +1331,19 @@ class Kb:
             traceback.print_exc()
             return ""
         return soon_box(lang, rows)
+
+    def grow_html(self, lang: str) -> str:
+        """kb grows from your cards, or nothing while there are no cards."""
+        from . import Picture
+        if not self.picture.exists():
+            return ""
+        try:
+            items = grow.lines(Picture.load(self.picture).cards)
+        except (ValueError, KeyError, OSError):
+            traceback.print_exc()
+            return ""
+        groups = grow.sort(items, self.grow_marks.all())
+        return grow_box(lang, groups, grow.build_text(groups["build"], _t(lang, "g_intro"), _t(lang, "g_from")))
 
     def nudge_html(self, lang: str) -> str:
         return nudge_box(lang, self.nudge.state())
@@ -1346,7 +1459,8 @@ class Handler(BaseHTTPRequestHandler):
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
                                  where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
-                                 soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang))
+                                 soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang),
+                                 grows=self.kb.grow_html(lang))
                 finally:
                     if log:
                         log.close()
@@ -1436,6 +1550,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/where":
                 self.kb.set_where(body.get("on") is True)
                 return self._json(200, {"ok": True, "on": self.kb.where_on()})
+            if path == "/api/grow":
+                self.kb.grow_marks.set(str(body.get("id") or ""), str(body.get("state") or ""),
+                                       self.kb.today or date.today())
+                return self._json(200, {"ok": True})
             if path == "/api/nudge":
                 return self._json(200, {"ok": True, **self._nudge(body)})
             if path == "/api/where/keep":

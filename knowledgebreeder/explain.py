@@ -91,6 +91,17 @@ TEXT = {
                             ("nudge_test", "Sends one note, to check that your phone gets it."),
                             ("nudge_off", "Stops every note. Your topic is kept for next time.")],
             },
+            "grow": {
+                "what": "kb's own to-do list, taken from your cards: what is unfinished on kb's card, and the parts and "
+                        "ideas on other cards that name kb.",
+                "how": "Answer each new line. The build list is what gets built next: copy it and paste it into your "
+                       "chat with Claude. Mark a line Done once kb has it. A line you answered stays answered when you "
+                       "add the cards again.",
+                "buttons": [("g_build", "Puts the line on the build list."),
+                            ("g_later", "Moves it out of the way. It waits under Not now."),
+                            ("g_done", "Takes it off the build list once kb has it."),
+                            ("g_copy", "Copies the build list as plain text, with the card each line came from.")],
+            },
             "runs": {
                 "what": "Every time you asked for advice, newest first, with who answered and how many answers you "
                         "rated.",
@@ -172,6 +183,16 @@ TEXT = {
                 "buttons": [("nudge_on", "ينشئ موضوعك الخاص ويبدأ التذكيرات."),
                             ("nudge_test", "يرسل رسالة واحدة لتتأكد أن هاتفك يستقبلها."),
                             ("nudge_off", "يوقف كل الرسائل. يبقى موضوعك محفوظًا للمرة القادمة.")],
+            },
+            "grow": {
+                "what": "قائمة مهام kb نفسه، مأخوذة من بطاقاتك: ما لم ينتهِ على بطاقة kb، والأجزاء والأفكار على البطاقات "
+                        "الأخرى التي تذكر kb.",
+                "how": "أجب عن كل سطر جديد. قائمة البناء هي ما يُبنى بعد ذلك: انسخها والصقها في محادثتك مع Claude. علّم "
+                       "السطر «تم» حين يصبح في kb. السطر الذي أجبت عنه يبقى كما هو حين تضيف البطاقات مرة أخرى.",
+                "buttons": [("g_build", "يضع السطر في قائمة البناء."),
+                            ("g_later", "يبعده عن الطريق. ينتظر تحت «ليس الآن»."),
+                            ("g_done", "يرفعه من قائمة البناء حين يصبح في kb."),
+                            ("g_copy", "ينسخ قائمة البناء نصًا عاديًا، مع البطاقة التي جاء منها كل سطر.")],
             },
             "runs": {
                 "what": "كل مرة طلبت فيها نصيحة، الأحدث أولًا، مع من أجاب وكم إجابة قيّمت.",
