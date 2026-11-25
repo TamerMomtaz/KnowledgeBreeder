@@ -36,6 +36,7 @@ from .. import theme
 from .. import where as wh
 from ..runlog import RunLog, query
 from . import actions, engines, icon, page, rating
+from . import soon as soon_mod
 from . import inbox as inb
 from . import lessons as les
 
@@ -119,6 +120,11 @@ LABELS = {
         "shared": "Shared to kb. Add a few words if you like, then press Send to kb.",
         "share_again": "kb was not ready for that share. Open kb once on this phone, then share again.",
         "app_desc": "Your kb: send it posts, links, screenshots, files and voice notes from any app.",
+        "soon_h": "Coming up",
+        "soon_note": "Dates written on your cards and the deadlines of open chances, nearest first. kb guesses none of them.",
+        "soon_missed": "Slipped, {when}, and still open", "soon_due": "Due {when}", "soon_on": "{when}",
+        "soon_chance": "A chance from your inbox, closes {when}", "soon_who": "Waits on {who}.",
+        "soon_you": "Waits on you.",
         "eng_h": "Where your work waits",
         "eng_note": "Worked out from your cards on this laptop, with no model: what waits on whom, and how long things "
                     "wait. The math comes from your research Mathematical Engines of Plan→T.",
@@ -210,6 +216,11 @@ LABELS = {
         "shared": "وصلت المشاركة إلى kb. أضف كلمات إن شئت، ثم اضغط أرسل إلى kb.",
         "share_again": "لم يكن kb جاهزًا لهذه المشاركة. افتح kb مرة على هذا الهاتف، ثم شارك مرة أخرى.",
         "app_desc": "kb الخاص بك: أرسل إليه المنشورات والروابط ولقطات الشاشة والملفات والرسائل الصوتية من أي تطبيق.",
+        "soon_h": "قريبًا",
+        "soon_note": "تواريخ مكتوبة على بطاقاتك ومواعيد الفرص المفتوحة، الأقرب أولًا. لا يخمّن kb أيًّا منها.",
+        "soon_missed": "فات موعده {when} وما زال مفتوحًا", "soon_due": "موعده {when}", "soon_on": "{when}",
+        "soon_chance": "فرصة من صندوقك، تُغلق {when}", "soon_who": "ينتظر: {who}.",
+        "soon_you": "ينتظرك أنت.",
         "eng_h": "أين ينتظر عملك",
         "eng_note": "محسوب من بطاقاتك على هذا اللابتوب، دون أي نموذج: ما ينتظر مَن، وكم تنتظر الأشياء. الحساب مأخوذ من "
                     "بحثك Mathematical Engines of Plan→T.",
@@ -375,6 +386,9 @@ ol.md li,ul.md li{margin:0 0 12px;overflow-wrap:anywhere}
 .days a{color:var(--accent);min-height:44px;display:inline-flex;align-items:center}
 .days a[aria-current]{color:var(--ink);font-weight:700;text-decoration:none}
 .eng h3{font-size:1.02rem;margin:16px 0 4px}
+.soon li.missed .when{color:var(--warn);font-weight:700}
+.soon li.deadline .when{font-weight:700}
+.soon .c{display:block;font-weight:700}
 .eng .lead{font-weight:700}
 input[type=search]{width:100%;min-height:46px;background:var(--bg);color:inherit;border:1px solid var(--line);border-radius:10px;padding:0 12px;font:inherit}
 """
@@ -790,6 +804,31 @@ def where_box(lang: str, on: bool, data: dict | None, problem: str | None = None
             f'<div class="links"><a href="/where?lang={lang}">{_e(_t(lang, "where_all"))}</a></div></section>')
 
 
+def soon_box(lang: str, rows: list[dict], show: int = 8) -> str:
+    """Coming up, first on the page: what slipped and what is close. Nothing when no date is close."""
+    if not rows:
+        return ""
+    out = []
+    for x in rows[:show]:
+        d = date.fromisoformat(x["when"])
+        day = (f'{d.day}/{d.month}' if lang == "ar" else f'{d:%a} {d.day} {d:%b}')
+        when = soon_mod.when_words(x["days"], lang)
+        head = {"missed": "soon_missed", "deadline": "soon_due", "date": "soon_on", "chance": "soon_chance"}[x["kind"]]
+        who, m = "", engines.YOU.match(x["who"] or "")
+        if m and not x["who"][m.end():].strip():
+            who = _e(_t(lang, "soon_you"))
+        elif x["who"]:                                    # the name isolated, so Arabic and English sit right
+            name = "you" + x["who"][m.end():] if m and lang == "en" else x["who"]
+            pre, post = LABELS[lang]["soon_who"].split("{who}")
+            who = f'{_e(pre)}<bdi>{_e(name)}</bdi>{_e(post)}'
+        card = f'<span class="c"><bdi>{_e(x["card"])}</bdi></span>' if x["card"] else ""
+        out.append(f'<li class="{_e(x["kind"])}">{card}<bdi>{_e(x["what"])}</bdi>'
+                   f'<span class="more"><span class="when">{_e(_t(lang, head, when=when))} · {_e(day)}</span>'
+                   f'{(" " + who) if who else ""}</span></li>')
+    return (f'<section class="box soon" id="soon"><h2>{_e(_t(lang, "soon_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "soon_note"))}</p><ul class="md">{"".join(out)}</ul></section>')
+
+
 def waits_box(lang: str, r: dict | None, problem: str | None = None) -> str:
     """Where your work waits: what frees the most, and how long things wait. Worked out from the cards, no model."""
     head = (f'<section class="box eng" id="waits"><h2>{_e(_t(lang, "eng_h"))}</h2>'
@@ -933,7 +972,7 @@ def manifest(lang: str) -> dict:
 
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
-          ask: str | None = None, where: str | None = None, waits: str | None = None) -> str:
+          ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -971,9 +1010,9 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main, side = inbox_html(box, lang, got) + (waits or "") + (where or ""), (ask or "") + runs_box + lessons_box
+        main, side = (soon or "") + inbox_html(box, lang, got) + (waits or "") + (where or ""), (ask or "") + runs_box + lessons_box
     else:
-        main, side = runs_box + (waits or "") + (where or ""), (ask or "") + lessons_box
+        main, side = (soon or "") + runs_box + (waits or "") + (where or ""), (ask or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
     return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
@@ -1076,6 +1115,26 @@ class Kb:
         self._waits = (key, r)
         return r
 
+    def soon(self) -> list[dict]:
+        """Coming up: dates on the cards and deadlines of open chances. Empty while there is no picture."""
+        from . import Picture
+        if not self.picture.exists():
+            return []
+        today = self.today or date.today()
+        chances = []
+        if self.ledger.exists():
+            from .. import scout
+            chances = scout.open_now(scout.Ledger(self.ledger).rows(), today)
+        return soon_mod.coming(Picture.load(self.picture).cards, today, chances)
+
+    def soon_html(self, lang: str) -> str:
+        try:
+            rows = self.soon()
+        except (ValueError, KeyError, OSError):
+            traceback.print_exc()
+            return ""
+        return soon_box(lang, rows)
+
     def waits_html(self, lang: str) -> str:
         """The box, or nothing while there are no cards: the Ask kb box already says how to add them."""
         try:
@@ -1153,7 +1212,8 @@ class Handler(BaseHTTPRequestHandler):
                     got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again", "cards") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
-                                 where=self.kb.where_html(lang), waits=self.kb.waits_html(lang))
+                                 where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
+                                 soon=self.kb.soon_html(lang))
                 finally:
                     if log:
                         log.close()
