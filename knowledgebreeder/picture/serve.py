@@ -36,7 +36,7 @@ from urllib.parse import parse_qs, urlsplit
 from .. import explain, margins, theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, engines, grow, icon, nudge, page, rating
+from . import actions, engines, grow, icon, ideas, nudge, page, rating
 from . import inbox as inb
 from . import lessons as les
 from . import private as prv
@@ -170,6 +170,20 @@ LABELS = {
         "g_intro": "Build these into KnowledgeBreeder (kb). They come from my cards:", "g_from": "from",
         "g_k_unfinished": "unfinished on kb", "g_k_need": "kb needs", "g_k_decision": "open decision on kb",
         "g_k_idea": "idea", "g_k_part": "part to reuse",
+        "ideas_h": "Your ideas",
+        "ideas_note": "Every idea, lesson, check and book principle kb has read, each with where it came from. Answer "
+                      "the oldest first: nothing is lost, only waiting.",
+        "ideas_count": "{n} rows from {p} projects and files.",
+        "ideas_num": "Last 7 days: {u} of {a} answered were useful. Done in 30 days: {d}.",
+        "ideas_num_none": "Nothing answered in the last 7 days yet.",
+        "ideas_new_h": "To answer, oldest first ({n} waiting)", "ideas_useful_h": "Useful ({n})",
+        "ideas_later": "Not now: {n}.", "ideas_done": "Done: {n}.",
+        "ideas_none": "No ideas yet. Add a journey file or a KB thinks file with Add cards from a file, or send it "
+                      "to your inbox: kb keeps it as ideas.",
+        "i_useful": "Useful", "i_later": "Not now", "i_done": "Done",
+        "i_k_check": "check", "i_k_lesson": "lesson", "i_k_idea": "idea", "i_k_principle": "book",
+        "i_k_weak": "weak spot", "i_k_part": "part to reuse", "i_k_strength": "strength",
+        "ideas_kept": "Kept {n} ideas from {name}.",
         "eng_h": "Where your work waits",
         "eng_note": "Worked out from your cards on this laptop, with no model: what waits on whom, and how long things "
                     "wait. The math comes from your research Mathematical Engines of Plan→T.",
@@ -308,6 +322,20 @@ LABELS = {
         "g_intro": "ابنِ هذه في KnowledgeBreeder (kb). هي من بطاقاتي:", "g_from": "من",
         "g_k_unfinished": "غير منتهٍ في kb", "g_k_need": "يحتاجه kb", "g_k_decision": "قرار مفتوح في kb",
         "g_k_idea": "فكرة", "g_k_part": "جزء يُعاد استخدامه",
+        "ideas_h": "أفكارك",
+        "ideas_note": "كل فكرة ودرس وفحص ومبدأ من كتاب قرأه kb، ومع كل منها مصدره. أجب عن الأقدم أولًا: لا شيء يضيع، "
+                      "بل ينتظر.",
+        "ideas_count": "{n} سطرًا من {p} مشروعًا وملفًا.",
+        "ideas_num": "آخر 7 أيام: {u} من {a} أجبت عنها كانت مفيدة. تم في 30 يومًا: {d}.",
+        "ideas_num_none": "لم تُجب عن شيء في آخر 7 أيام بعد.",
+        "ideas_new_h": "للإجابة، الأقدم أولًا ({n} ينتظر)", "ideas_useful_h": "مفيد ({n})",
+        "ideas_later": "ليس الآن: {n}.", "ideas_done": "تم: {n}.",
+        "ideas_none": "لا أفكار بعد. أضف ملف رحلة أو ملف «KB يفكر» من «أضف بطاقات من ملف»، أو أرسله إلى صندوقك: "
+                      "يحفظه kb أفكارًا.",
+        "i_useful": "مفيد", "i_later": "ليس الآن", "i_done": "تم",
+        "i_k_check": "فحص", "i_k_lesson": "درس", "i_k_idea": "فكرة", "i_k_principle": "كتاب",
+        "i_k_weak": "نقطة ضعف", "i_k_part": "جزء يُعاد استخدامه", "i_k_strength": "نقطة قوة",
+        "ideas_kept": "حُفظت {n} فكرة من {name}.",
         "eng_h": "أين ينتظر عملك",
         "eng_note": "محسوب من بطاقاتك على هذا اللابتوب، دون أي نموذج: ما ينتظر مَن، وكم تنتظر الأشياء. الحساب مأخوذ من "
                     "بحثك Mathematical Engines of Plan→T.",
@@ -609,6 +637,15 @@ document.addEventListener("click", function(e){
   fetch("/api/grow", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
                       body: JSON.stringify({id: b.getAttribute("data-id"), state: b.getAttribute("data-state")})})
     .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); again("#grow"); }); })
+    .catch(function(err){ b.disabled = false; b.title = err.message; });
+});
+document.addEventListener("click", function(e){
+  var b = e.target.closest && e.target.closest(".i-act");
+  if (!b) return;
+  b.disabled = true;
+  fetch("/api/ideas", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
+                       body: JSON.stringify({id: b.getAttribute("data-id"), state: b.getAttribute("data-state")})})
+    .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); again("#ideas"); }); })
     .catch(function(err){ b.disabled = false; b.title = err.message; });
 });
 var gcopy = document.getElementById("g-copy");
@@ -1078,6 +1115,38 @@ def grow_box(lang: str, groups: dict[str, list[dict]] | None, text: str = "", sh
     return "".join(out) + "</section>"
 
 
+def ideas_box(lang: str, v: dict | None) -> str:
+    """Your ideas: the two numbers, the oldest rows to answer, and the useful ones. Nothing before the first file."""
+    if v is None:
+        return ""
+    head = (f'<section class="box grow ideas" id="ideas"><h2>{_e(_t(lang, "ideas_h"))}</h2>'
+            f'<p class="soft small">{_e(_t(lang, "ideas_note"))}</p>')
+    if not v["rows"]:
+        return head + f'<p class="soft">{_e(_t(lang, "ideas_none"))}</p></section>'
+    nb = v["numbers"]
+    num = (_t(lang, "ideas_num", u=nb["useful_7d"], a=nb["answered_7d"], d=nb["done_30d"]) if nb["answered_7d"]
+           else _t(lang, "ideas_num_none"))
+    out = [head, f'<p>{_e(_t(lang, "ideas_count", n=v["rows"], p=v["projects"]))} <b>{_e(num)}</b></p>']
+
+    def li(x: dict, acts: tuple[str, ...]) -> str:
+        btns = "".join(f'<button type="button" class="btn i-act" data-id="{x["id"]}" data-state="{st}">'
+                       f'{_e(_t(lang, "i_" + st))}</button>' for st in acts)
+        return (f'<li><span class="c"><bdi>{_e(x["project"])}</bdi> · {_e(_t(lang, "i_k_" + x["kind"]))}</span>'
+                f'<bdi>{_e(x["text"])}</bdi><span class="why"><bdi dir="ltr">{_e(x["source"])}</bdi></span>'
+                f'<span class="g-acts">{btns}</span></li>')
+
+    if v["to_answer"]:
+        out.append(f'<h3>{_e(_t(lang, "ideas_new_h", n=v["new"]))}</h3>'
+                   f'<ul class="g-list">{"".join(li(x, ("useful", "later", "done")) for x in v["to_answer"])}</ul>')
+    if v["useful"]:
+        out.append(f'<details class="g-more"><summary>{_e(_t(lang, "ideas_useful_h", n=len(v["useful"])))}</summary>'
+                   f'<ul class="g-list">{"".join(li(x, ("done", "later")) for x in v["useful"])}</ul></details>')
+    tail = " ".join(_t(lang, k, n=v[f]) for k, f in (("ideas_later", "later"), ("ideas_done", "done")) if v[f])
+    if tail:
+        out.append(f'<p class="soft small">{_e(tail)}</p>')
+    return "".join(out) + "</section>"
+
+
 def waits_box(lang: str, r: dict | None, problem: str | None = None) -> str:
     """Where your work waits: what frees the most, and how long things wait. Worked out from the cards, no model."""
     head = (f'<section class="box eng" id="waits"><h2>{_e(_t(lang, "eng_h"))}</h2>'
@@ -1222,7 +1291,7 @@ def manifest(lang: str) -> dict:
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
           ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None,
-          nudges: str | None = None, grows: str | None = None) -> str:
+          nudges: str | None = None, grows: str | None = None, ideas_html: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -1260,10 +1329,10 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main = (soon or "") + inbox_html(box, lang, got) + (waits or "") + (grows or "") + (where or "")
+        main = (soon or "") + inbox_html(box, lang, got) + (ideas_html or "") + (waits or "") + (grows or "") + (where or "")
         side = (ask or "") + (nudges or "") + runs_box + lessons_box
     else:
-        main = (soon or "") + runs_box + (waits or "") + (grows or "") + (where or "")
+        main = (soon or "") + runs_box + (ideas_html or "") + (waits or "") + (grows or "") + (where or "")
         side = (ask or "") + (nudges or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
@@ -1314,6 +1383,8 @@ class Kb:
         self.nudge_post = nudge._post                           # tests put a stand-in here; nothing leaves then
         self.nudge_lock = threading.Lock()
         self.grow_marks = grow.Marks(work / "grow.json")
+        self.ideas_dir = work / "ideas"
+        self.ideas_book = ideas.Book(work / "ideas.json")
 
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
@@ -1409,6 +1480,23 @@ class Kb:
             return ""
         groups = grow.sort(items, self.grow_marks.all())
         return grow_box(lang, groups, grow.build_text(groups["build"], _t(lang, "g_intro"), _t(lang, "g_from")))
+
+    def ideas_view(self) -> dict | None:
+        """The ledger as the page shows it, or None while kb has neither cards nor an ideas file."""
+        from . import Picture
+        has_files = self.ideas_dir.is_dir() and any(self.ideas_dir.glob("*.md"))
+        if not self.picture.exists() and not has_files:
+            return None
+        try:
+            cards = Picture.load(self.picture).cards if self.picture.exists() else {}
+            rows = ideas.ledger(cards, self.ideas_dir)
+            return ideas.view(rows, self.ideas_book, self.today or date.today())
+        except (ValueError, KeyError, OSError):
+            traceback.print_exc()
+            return None
+
+    def ideas_html(self, lang: str) -> str:
+        return ideas_box(lang, self.ideas_view())
 
     def nudge_html(self, lang: str) -> str:
         return nudge_box(lang, self.nudge.state())
@@ -1525,7 +1613,7 @@ class Handler(BaseHTTPRequestHandler):
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
                                  where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
                                  soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang),
-                                 grows=self.kb.grow_html(lang))
+                                 grows=self.kb.grow_html(lang), ideas_html=self.kb.ideas_html(lang))
                 finally:
                     if log:
                         log.close()
@@ -1619,6 +1707,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.kb.grow_marks.set(str(body.get("id") or ""), str(body.get("state") or ""),
                                        self.kb.today or date.today())
                 return self._json(200, {"ok": True})
+            if path == "/api/ideas":
+                self.kb.ideas_book.mark(str(body.get("id") or ""), str(body.get("state") or ""),
+                                        self.kb.today or date.today())
+                return self._json(200, {"ok": True})
             if path == "/api/nudge":
                 return self._json(200, {"ok": True, **self._nudge(body)})
             if path == "/api/where/keep":
@@ -1660,6 +1752,12 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(text, str):
                 raise KeyError("text must be the cards file as text.")
             r = actions.add_cards(kb.picture, kb.cards, name, text, kb.today or date.today())
+            if not r["found"]:
+                kept = ideas.keep_file(kb.ideas_dir, name, text)
+                if kept["rows"]:
+                    return self._json(200, {"ok": True, "say": _t(lang, "ideas_kept", n=kept["rows"], name=name),
+                                            "cls": "kept", "link": "#ideas", "link_text": _t(lang, "ideas_h"),
+                                            "reload": True})
             kb.cards_said = (time.time(), r)
             return self._json(200, {"ok": True, **cards_say(r, lang)})
         if kb.jobs.state()["status"] == "running":
@@ -1795,6 +1893,11 @@ class Handler(BaseHTTPRequestHandler):
             return None
         text = inb._decode(raw) or ""
         if not cards.parse(text):
+            if name.lower().endswith(".md"):
+                kept = ideas.keep_file(self.kb.ideas_dir, name, text)
+                if kept["rows"]:
+                    return {"id": None, "kind": "cards", "status": "cards", "new": True, "name": name, "found": 0,
+                            "added": 0, "updated": 0, "cards": self.kb.cards_count() or 0, "ideas": kept["rows"]}
             return None
         r = actions.add_cards(self.kb.picture, self.kb.cards, name, text, today)
         self.kb.cards_said = (time.time(), r)

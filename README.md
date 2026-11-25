@@ -720,6 +720,28 @@ kb picture engines
 
 The math comes from the research "Mathematical Engines of Plan→T", carried over from a plant to your own work.
 
+#### Your ideas
+
+One ledger of every idea, lesson, check and book principle kb has read, each with the file and line it came from.
+It is the base the next parts stand on: the bookshelf, the forgot-checker and the matcher across projects. It reads
+the ideas not started and the reusable parts on your cards, and the markdown files you add: a journey file, a "KB
+thinks" file, or any file whose headings say lessons, strengths, weak spots, what you forgot, ideas or a book. Under
+those headings each list line is one row. Timelines, sources and how-it-works sections are story and are left out.
+
+Add a file with **Add cards from a file** on the page (a file with no cards in it is kept as ideas), by sending it to
+your inbox, or in the terminal:
+
+```bash
+kb picture ideas --add stairs-journey.md smt-journey.md
+kb picture ideas
+```
+
+Answer each row **Useful**, **Not now** or **Done**, oldest first, so what you may have forgotten comes back first.
+Two numbers say whether kb's ideas help you: of the rows you answered in the last 7 days, how many were useful, and
+how many you marked done in the last 30 days. Rows are worked out from their sources every time and never stored;
+only your answers and the day kb first saw each row are kept, in `work/ideas.json`. The same line about the same
+project keeps its answer when you send a newer copy of the file. No model reads anything here.
+
 ### The scout
 
 Save pages into a folder as `.txt`, `.md` or `.html`: a call for proposals, a newsletter, an announcement. Then:

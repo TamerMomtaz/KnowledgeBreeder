@@ -24,6 +24,7 @@
     kb picture check                            is your picture ready for a model? five questions, and your ticks
     kb picture engines                          where your work waits: what frees the most, how long things wait
     kb picture changes                          what changed on your cards, and what left them; nothing is overwritten
+    kb picture ideas                            your ideas: every idea, lesson, check and book line kb has read, with its source
     kb picture town --out work/town.html        the picture as a town, one file, opens offline
     kb picture advise                           advice written by a model, held to your own cards and your lessons
     kb picture lesson "Quiet is not dead."      teach every later run one rule, in your own words
@@ -162,6 +163,11 @@ def main(argv: list[str] | None = None) -> int:
     x = ps.add_parser("check", help="is your picture ready for a model? five questions, and what your ticks say")
     x.add_argument("--json", action="store_true"); x.add_argument("--today"); x.add_argument("--runlog", default=runlog)
     x = ps.add_parser("engines", help="where your work waits: what frees the most, and how long things wait")
+    x.add_argument("--json", action="store_true"); x.add_argument("--today")
+    x = ps.add_parser("ideas", help="your ideas: every idea, lesson, check and book line kb has read, with its source")
+    x.add_argument("--add", nargs="+", default=[], metavar="FILE", help="keep these markdown files as ideas")
+    x.add_argument("--mark", nargs=2, metavar=("ROW", "STATE"), help="answer one row: useful, later, done, or none")
+    x.add_argument("--show", type=int, default=7, help="how many rows to answer to show")
     x.add_argument("--json", action="store_true"); x.add_argument("--today")
     x = ps.add_parser("private", help="add a name to your private list, or list it")
     x.add_argument("text", nargs="*", help="a name or word that never goes to a model off this machine; none lists them")
@@ -421,6 +427,8 @@ def _picture(a, dump) -> int:
         out["saved"] = str(pic.save(a.file)); out["cards"] = len(pic.cards)
         dump(out)
         return 0
+    if a.pic_cmd == "ideas":
+        return _ideas(a, dump)
     if a.pic_cmd == "lesson":
         return _lesson(a)
     if a.pic_cmd == "private":
@@ -583,6 +591,33 @@ def _check(a, dump, pic, today) -> int:
             log.close()
     c = check.check(pic, runs, today)
     dump(c) if a.json else print(check.check_md(c))
+    return 0
+
+
+def _ideas(a, dump) -> int:
+    """kb picture ideas: add files, answer a row, or show the ledger. It lives beside the picture, in work/."""
+    from datetime import date
+    from pathlib import Path
+
+    from .picture import Picture, ideas
+    work = Path(os.path.dirname(os.path.abspath(a.file)))
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    book = ideas.Book(work / "ideas.json")
+    kept = []
+    for path in a.add:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            kept.append(ideas.keep_file(work / "ideas", os.path.basename(path), f.read()))
+    if a.mark:
+        state = "" if a.mark[1] == "none" else a.mark[1]
+        book.mark(a.mark[0], state, today)
+    pic = Picture.load(a.file) if os.path.exists(a.file) else None
+    v = ideas.view(ideas.ledger(pic.cards if pic else {}, work / "ideas"), book, today, show=a.show)
+    if a.json:
+        dump({**v, "kept": kept})
+    else:
+        for k in kept:
+            print(f"{k['name']}: {k['rows']} ideas" + ("" if k["rows"] else " (no lists under idea, lesson or check headings)"))
+        print(ideas.md(v), end="")
     return 0
 
 
