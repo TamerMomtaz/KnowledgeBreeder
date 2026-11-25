@@ -33,7 +33,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 
-from .. import explain, theme
+from .. import explain, margins, theme
 from .. import where as wh
 from ..runlog import RunLog, query
 from . import actions, engines, icon, nudge, page, rating
@@ -1119,7 +1119,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # a ? on every box, with the buttons named as the page names them (without a count in brackets)
     def name(k: str) -> str:
         return re.sub(r"\s*\(.*$", "", LABELS[lang][k])
-    return explain.inject(theme.inject(explain.add(doc, lang, name)), script=False)
+    return margins.inject(explain.inject(theme.inject(explain.add(doc, lang, name)), script=False))
 
 
 class Kb:
