@@ -33,7 +33,7 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 
-from .. import theme
+from .. import explain, theme
 from .. import where as wh
 from ..runlog import RunLog, query
 from . import actions, engines, icon, nudge, page, rating
@@ -1088,8 +1088,8 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
             "starting", "reading", "where_on", "shared", "share_again")
-    runs_box = f'<section class="box"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
-    lessons_box = (f'<section class="box"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
+    runs_box = f'<section class="box" id="runs"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
+    lessons_box = (f'<section class="box" id="lessons"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
                    f'<textarea id="lesson" dir="auto" maxlength="600" placeholder="{_e(_t(lang, "lesson_ph"))}" '
                    f'aria-label="{_e(_t(lang, "lesson_ph"))}"></textarea>'
@@ -1105,17 +1105,21 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
         main, side = (soon or "") + runs_box + (waits or "") + (where or ""), (ask or "") + (nudges or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
-    return theme.inject(f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
+    doc = (f'<!doctype html><html lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer">'
             f'<title>{_e(_t(lang, "title"))}</title><link rel="manifest" href="/manifest.webmanifest">'
             f'<link rel="icon" href="/icon-192.png" sizes="192x192"><meta name="theme-color" content="#1d2430">'
             f'<style>{INDEX_CSS}</style></head><body><div class="wrap">'
             f'<header><div class="top"><h1>{_e(_t(lang, "title"))}</h1><a href="/?lang={LABELS[lang]["other_lang"]}" '
             f'lang="{LABELS[lang]["other_lang"]}">{_e(LABELS[lang]["other"])}</a></div>'
-            f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}{hud}</header>'
+            f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}{explain.guide(lang)}{hud}</header>'
             f'<div class="layout"><div class="main">{main}</div><div class="side">{side}</div></div>'
             f'<footer><p>{_e(_t(lang, "private"))}</p></footer></div>'
-            f'<script id="data" type="application/json">{blob}</script><script>{INDEX_JS}</script></body></html>')
+            f'<script id="data" type="application/json">{blob}</script><script>{INDEX_JS}\n{explain.JS}</script></body></html>')
+    # a ? on every box, with the buttons named as the page names them (without a count in brackets)
+    def name(k: str) -> str:
+        return re.sub(r"\s*\(.*$", "", LABELS[lang][k])
+    return explain.inject(theme.inject(explain.add(doc, lang, name)), script=False)
 
 
 class Kb:

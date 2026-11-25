@@ -25,7 +25,7 @@ from datetime import date
 from importlib import resources
 from pathlib import Path
 
-from .. import theme
+from .. import explain, theme
 from ..runlog import RunLog, query
 from . import private, trail
 
@@ -476,9 +476,11 @@ def build(data: dict, hist: list[dict] | None = None, lang: str = "en", log_flag
              "<!--__TRAIL__-->": _trail(data, lang),
              "/*__DATA__*/": blob}
     fill["<!--__BACK__-->"] = (f'<p class="back"><a href="/?lang={lang}">{_e(_t(lang, "back"))}</a></p>' if live else "")
+    fill["<!--__HUD__-->"] += explain.guide(lang, "run") if live else ""
     if live:                                    # the Save buttons talk to kb on the machine that served the page
         page = page.replace("default-src 'none';", "default-src 'none'; connect-src 'self';", 1)
-    return theme.inject(re.sub(r"<!--__[A-Z]+__-->|/\*__DATA__\*/|__[A-Z_]+__", lambda m: fill.get(m.group(0), m.group(0)), page))
+    out = theme.inject(re.sub(r"<!--__[A-Z]+__-->|/\*__DATA__\*/|__[A-Z_]+__", lambda m: fill.get(m.group(0), m.group(0)), page))
+    return explain.inject(out) if live else out
 
 
 def write(path: str | Path, page: str) -> Path:
