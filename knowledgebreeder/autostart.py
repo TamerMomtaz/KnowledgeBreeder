@@ -5,7 +5,8 @@ it now and at every login. It runs the same ``kb serve`` you would type, with ev
 does not depend on the folder or the terminal it was started from. ``kb serve --uninstall`` takes it away again.
 
 It needs no sudo. The service runs as you, sees only what you see, and still listens on 127.0.0.1 only. Keys you
-export in a terminal are not in its environment, so the page asks models on this laptop only.
+export in a terminal are not in its environment; the keys you keep with ``kb keys add`` are, because each job reads
+~/.config/kb/keys.env again.
 """
 
 from __future__ import annotations

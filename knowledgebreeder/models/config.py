@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_PATH = "work/models.json"
+CAP = 1.0                           # dollars a day the page may spend on paid models, until you say another
 PROTOCOLS = ("openai", "anthropic")
 CLAUDE_API = "https://api.anthropic.com"
 LOCAL_URL = "http://localhost:11434/v1"
@@ -47,6 +48,7 @@ class Book:
     models: dict[str, Model]
     default: str | None
     path: str
+    cap: float = CAP                # "daily_cap" in the file: what the page may spend a day, in dollars
 
     def get(self, name: str | None = None) -> Model:
         name = name or self.default
@@ -105,7 +107,28 @@ def load(path: str | Path | None = None) -> Book:
     default = data.get("default") or next(iter(models), None)
     if default and default not in models:
         raise KeyError(f"{p}: the default '{default}' is not one of its models.")
-    return Book(models, default, str(p))
+    return Book(models, default, str(p), _cap(data.get("daily_cap", CAP), str(p)))
+
+
+def _cap(raw: Any, path: str) -> float:
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not 0 <= raw <= 1000:
+        raise KeyError(f"{path}: \"daily_cap\" must be a number of dollars from 0 to 1000.")
+    return float(raw)
+
+
+def set_cap(path: str | Path, dollars: float) -> float:
+    """Write what the page may spend a day on paid models into the models file, keeping everything else."""
+    p = Path(path)
+    if not p.exists():
+        raise KeyError(f"no models file at {p}. Make one with: kb models init")
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise KeyError(f"{p} must hold an object with a \"models\" object inside.")
+    data["daily_cap"] = _cap(round(float(dollars), 2), str(p))
+    tmp = p.with_name(p.name + ".part")
+    tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, p)
+    return data["daily_cap"]
 
 
 def example(local_models: list[str] | None = None, url: str = LOCAL_URL) -> dict:
