@@ -74,6 +74,10 @@ TEXT = {
             "ask": {
                 "what": "The buttons that used to need the terminal. Each one runs here on the laptop, and you can "
                         "leave the page while kb works.",
+                "how": ("Advice asks every model you like: the ones on this laptop, and each paid one you keep a key "
+                        "for, while today's spend stays under your daily cap ($1 until you change it). To add a paid "
+                        "model, type kb keys add on the laptop, followed by openai, gemini, kimi, deepseek or claude. "
+                        "Lines that are private never leave the laptop."),
                 "buttons": [("b_advise", ("Your models read your cards, and each suggests what to do next. Open the "
                                          "run to rate the answers.")),
                             ("b_scout", ("kb reads your inbox for calls, grants and offers that fit your cards, with "
@@ -170,6 +174,10 @@ TEXT = {
             "ask": {
                 "what": "الأزرار التي كانت تحتاج الطرفية. كل زر يعمل هنا على اللابتوب، ويمكنك مغادرة الصفحة بينما يعمل "
                         "kb.",
+                "how": ("تسأل النصيحة كل نموذج تحبه: نماذج هذا اللابتوب، وكل نموذج مدفوع تحفظ له مفتاحًا، ما دام إنفاق "
+                        "اليوم تحت سقفك اليومي (دولار واحد حتى تغيّره). لإضافة نموذج مدفوع اكتب على اللابتوب kb keys "
+                        "add ثم اسم المزوّد: openai أو gemini أو kimi أو deepseek أو claude. السطور الخاصة لا تغادر "
+                        "اللابتوب أبدًا."),
                 "buttons": [("b_advise", ("تقرأ نماذجك بطاقاتك، ويقترح كل منها ما تفعله بعد ذلك. افتح التشغيل لتقيّم "
                                          "الإجابات.")),
                             ("b_scout", "يقرأ kb صندوقك بحثًا عن دعوات ومنح وعروض تناسب بطاقاتك، مع مواعيد إغلاقها."),

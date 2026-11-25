@@ -36,6 +36,9 @@
     kb agents                                   your agents' register, and what in it needs a person's look
     kb models pick RUN NAME                     record which model's answer you chose
     kb models add gemini                        add a provider kb knows (openai, gemini, kimi, deepseek, claude)
+    kb keys add gemini                          keep its key where the page can use it; nothing shows as you paste
+    kb keys                                     which paid models the page asks, and what they cost today
+    kb keys cap 2                               the page may spend up to $2 a day on paid models ($1 until you say)
     kb serve                                    your inbox and advice runs as pages on this machine, for your phone
     kb inbox                                    what you sent: posts, links, screenshots, PDFs, Word files, voice notes
     kb inbox add FILES --note "why I kept it"   put files from this laptop in the inbox too
@@ -52,15 +55,19 @@ The models file is private too: --models-file PATH, or the KB_MODELS variable, o
 Your lessons are one private Markdown file: --lessons PATH, or the KB_LESSONS variable, or work/lessons.md here.
 Your private list is one too: --private PATH, or the KB_PRIVATE variable, or work/private.md here.
 Your inbox is one private folder: --inbox PATH, or the KB_INBOX variable, or work/inbox here.
+Your keys are kept in ~/.config/kb/keys.env (or the KB_KEYS variable), which only you can read.
 A model on this machine is asked freely and sees everything. Any other needs --allow NAME, for that one run, and
 never gets a line that holds a phone, an email, a key, an amount of money, a name on your private list, or #private.
+The page's Ask for advice allows the paid models you keep keys for, under your daily cap.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
+import re
 import sys
 import time
 
@@ -192,6 +199,14 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--as", dest="as_name", help="the name to give the entry, default the provider's")
     x.add_argument("--model", help="a different model id at that provider")
     x.add_argument("--force", action="store_true", help="write the entry again if it is there")
+    ky = sub.add_parser("keys", help="your keys for paid models, kept where kb's page can use them, and its daily cap")
+    ky.add_argument("action", nargs="?", choices=["list", "add", "remove", "cap"], default="list",
+                    help="list (the default) shows names only; add asks for a key without showing it; remove takes "
+                         "one away; cap shows or sets what the page may spend a day, in dollars")
+    ky.add_argument("rest", nargs="*", help="for add and remove, the model's name (openai, gemini, kimi, deepseek, "
+                                            "claude, or one in your models file); for cap, the dollars")
+    ky.add_argument("--models-file", default=mfile); ky.add_argument("--runlog", default=runlog)
+    ky.add_argument("--today"); ky.add_argument("--json", action="store_true")
     ag = sub.add_parser("agents", help="a register of your agents, and what in it needs a person's look")
     ag.add_argument("action", nargs="?", choices=["list", "init"], default="list",
                     help="list (the default) shows the register; init makes the file to fill in")
@@ -207,7 +222,8 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--lang", choices=["en", "ar"], default="en")
     sv.add_argument("--inbox", default=os.environ.get("KB_INBOX", "work/inbox"), help="where what you send is kept")
     sv.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
-    sv.add_argument("--models-file", default=mfile, help="the models the page's buttons may ask (this laptop's only)")
+    sv.add_argument("--models-file", default=mfile,
+                    help="the models the page's buttons may ask: this laptop's, and paid ones with a kept key")
     sv.add_argument("--private", default=pfile, metavar="PATH", help="your private list")
     sv.add_argument("--ledger", default=os.environ.get("KB_SCOUT", "work/scout.jsonl"), help="the scout's ledger")
     sv.add_argument("--open", action="store_true", help="open it in your browser")
@@ -282,11 +298,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(where.md(data, a.find), end="")
         return 0
-    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox"):
+    if a.cmd != "serve":                                     # kb serve reads the keys file again for every job
+        from . import keys
+        keys.fill()
+    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox", "keys"):
         from .models import ModelError, Refused
         try:
             return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve,
-                    "agents": _agents, "inbox": _inbox}[a.cmd](a, dump)
+                    "agents": _agents, "inbox": _inbox, "keys": _keys}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
@@ -485,7 +504,7 @@ def _advise(a, dump, pic, today) -> int:
     from .picture.private import Private
     taught, old = ([], 0) if a.no_lessons else les.fit(les.read(a.lessons))
     guard = Private.load(a.private)
-    plans = []
+    plans, held_back = [], []
     for m in chosen:                                        # every destination is checked before anything is sent
         p = adv.plan(pic, m, today=today, top=a.top, lang=a.lang, project=project, lessons=taught, private=guard)
         if a.show_prompt:
@@ -494,14 +513,17 @@ def _advise(a, dump, pic, today) -> int:
                   f"Nothing was sent.\n\n{p.system}\n\n{p.user}\n")
             continue
         if not p.lines:
-            raise KeyError(f"every line kb could send {m.name} is private ({p.sending().partition('; ')[2]}), so "
-                           f"nothing was sent. Ask a model on this machine instead.")
+            said = f"every line kb could send {m.name} is private ({p.sending().partition('; ')[2]}), so nothing was sent"
+            if len(chosen) == 1:
+                raise KeyError(said + ". Ask a model on this machine instead.")
+            held_back.append({"worker": m.name, "model": m.model, "error": said + "."})
+            continue                                        # the others still answer
         models.gate(m, a.allow, p.chars, p.sending())
         plans.append(m)
     if a.show_prompt:
         return 0
     log, run = _open_log(a, "advise", ",".join(m.name for m in chosen), pic.name(project) if project else "whole picture")
-    results, failed = [], 0
+    results, failed = list(held_back), len(held_back)
     for m in plans:
         try:
             r = adv.advise(pic, m, allow=a.allow, today=today, top=a.top, lang=a.lang, project=project, lessons=taught,
@@ -522,7 +544,9 @@ def _advise(a, dump, pic, today) -> int:
                        duration_ms=r["ms"], tokens_in=r["tokens_in"], tokens_out=r["tokens_out"], cost=r["cost"],
                        scores=r["scores"], where=r["where"])
     if run:
-        run.end("failed" if failed == len(plans) else "ok")
+        for r in held_back:
+            run.record("advise", worker=r["worker"], version=r["model"], status="failed", error=r["error"])
+        run.end("failed" if failed == len(chosen) else "ok")
     if a.json:
         dump({"run": run.id if run else None, "results": results})
     else:
@@ -544,7 +568,7 @@ def _advise(a, dump, pic, today) -> int:
                     print(f"  kb picture rate{flag} {run.id}" + (f" --worker {w}" if len(plans) > 1 else ""))
             if len(names) > 1:
                 print(f"Choose the better answer with: kb models pick {run.id} followed by {' or '.join(names)}.")
-    return 2 if failed == len(plans) else 0
+    return 2 if failed == len(chosen) else 0
 
 
 def _check(a, dump, pic, today) -> int:
@@ -793,6 +817,120 @@ def _inbox(a, dump) -> int:
         return 0
     items = box.items()
     dump(items) if a.json else print(inb.list_md(items, a.inbox), end="")
+    return 0
+
+
+def _keys(a, dump) -> int:
+    """kb keys: keep a key where the page can use it, never showing it; list names only; set the page's daily cap."""
+    import getpass
+    from datetime import date
+    from . import keys, models
+    from .models import config
+    from .picture import actions
+    rest = [re.sub("[\u200e\u200f\u2066-\u2069]", "", x).strip() for x in a.rest]   # copied from the Arabic page
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    if a.action == "cap":
+        if not rest:
+            book = models.load(a.models_file)
+            print(f"The page may spend ${book.cap:.2f} a day on paid models. Spent today: "
+                  f"${actions.spent(a.runlog, today):.2f}.\nTo change it, type kb keys cap followed by the dollars a day.")
+            return 0
+        try:
+            dollars = float(rest[0].lstrip("$"))
+        except ValueError:
+            raise KeyError(f"'{rest[0]}' is not an amount of dollars.") from None
+        cap = config.set_cap(a.models_file, dollars)
+        print(f"Done. The page may now spend up to ${cap:.2f} a day on paid models."
+              + (" At $0 it asks only the models on this laptop." if cap == 0 else ""))
+        return 0
+    try:
+        book = models.load(a.models_file)
+    except KeyError:
+        if a.action != "add":
+            raise
+        book = None                                     # no models file yet: kb keys add writes one
+    if a.action == "list":
+        c = actions.choose(a.models_file, a.runlog, today)
+        why = dict(c["out"])
+        rows = []
+        for m in book.models.values():
+            if models.allowed(m):
+                continue
+            rows.append({"model": m.name, "variable": m.key_env, "key": keys.have(m.key_env) or "none",
+                         "page_asks": m.name in c["paid"], "why_not": why.get(m.name)})
+        used = {m.key_env for m in book.models.values()}
+        spare = [n for n in keys.names() if n not in used]
+        if a.json:
+            dump({"file": str(keys.path()), "models": rows, "unused_keys": spare, "spent_today": c["spent"],
+                  "cap": c["cap"]})
+            return 0
+        from .picture.serve import reason
+        print(f"Keys file: {keys.path()} (only you can read it; kb never prints a key)")
+        for r in rows:
+            if r["key"] == "terminal":
+                said = (f"key in this terminal only, so the page cannot use it. Keep it with: kb keys add {r['model']}")
+            elif r["page_asks"]:
+                said = f"key kept as {r['variable']}. The page asks it."
+            else:
+                said = (f"key kept as {r['variable']}. " if r["key"] == "kept" else "") + \
+                    reason("en", r["why_not"] or "no_key", r["model"]) + "."
+            print(f"- {r['model']}: {said[0].upper() + said[1:]}")
+        if not rows:
+            print("Your models file names no paid model yet. Add one with kb keys add followed by openai, gemini, "
+                  "kimi, deepseek or claude.")
+        if spare:
+            print(f"Kept, but no model uses them: {', '.join(spare)}.")
+        print(f"Spent today on paid models: ${c['spent']:.2f} of your ${c['cap']:.2f} a day.")
+        return 0
+    if len(rest) != 1:
+        held = ", ".join(book.models) if book else "no models file yet"
+        raise KeyError(f"say which model: kb keys {a.action} followed by its name. Your models file holds: {held}.")
+    name = rest[0]
+    if a.action == "remove":
+        var = book.models[name].key_env if name in book.models else name if name in keys.names() else None
+        if not var:
+            raise KeyError(f"no model called '{name}' in {a.models_file}, and no key kept by that name.")
+        if keys.drop(var):
+            sharing = [m.name for m in book.models.values() if m.key_env == var]
+            print(f"Removed {var} from {keys.path()}. The page stops asking {', '.join(sharing) or name}.")
+        else:
+            print(f"{keys.path()} keeps no {var}, so nothing changed.")
+        return 0
+    if book and name in book.models:
+        m = book.models[name]
+    elif name in config.PRESETS:
+        m, preset = config.add_preset(a.models_file, name)
+        print(f"Added '{m.name}' to {a.models_file}: {m.model}.\n{preset['data']}\n")
+        book = models.load(a.models_file)
+    else:
+        raise KeyError(f"no model called '{name}' in {a.models_file}, and kb has no ready entry for it. "
+                       f"kb knows: {', '.join(config.PRESETS)}.")
+    if not m.key_env:
+        raise KeyError(f"'{m.name}' names no key variable in {a.models_file}, so there is no key to keep for it.")
+    page = (config.PRESETS.get(name) or {}).get("key_page")
+    if page:
+        print(f"Get a key at {page}")
+    print(f"Paste the key for {m.name} and press Enter. Nothing shows while you paste, on purpose: the key stays off "
+          f"the screen and out of your shell history.")
+    try:
+        value = getpass.getpass("Key: ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise KeyError("no key was pasted, so nothing was saved.") from None
+    f = keys.put(m.key_env, value)
+    print(f"Kept as {m.key_env} in {f}. Only you can read that file, and kb never prints the key.")
+    if models.allowed(m):
+        print(f"{m.name} is on this laptop or your network, so the page asks it anyway.")
+    elif m.price_in is None or m.price_out is None:
+        print(f"kb does not know {m.name}'s price, so the page leaves it out until its entry in {a.models_file} has "
+              f"price_in and price_out (dollars per million tokens). A command with --allow {m.name} still uses it.")
+    elif m.protocol == "anthropic" and importlib.util.find_spec("anthropic") is None:
+        print(f"{m.name} needs the Anthropic SDK before anything can ask it. Install it with:\n"
+              f"  pip install -e \".[key]\"")
+    else:
+        print(f"The page now asks {m.name} beside your models on this laptop, up to ${book.cap:.2f} a day for all "
+              f"paid models together. There is nothing to restart.")
+    print(f"Check that it answers (this sends only a test question):\n  kb models check {m.name} --allow {m.name}")
     return 0
 
 

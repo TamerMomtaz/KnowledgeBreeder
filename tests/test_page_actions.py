@@ -106,7 +106,7 @@ def test_cards_are_added_from_the_page_and_nothing_is_overwritten(tmp_path, up):
     _, _, doc = ask(kb, "GET", "/chances")
     assert "kb has not read your inbox yet." in doc
     _, _, doc = ask(kb, "GET", "/")
-    assert "Your picture: 5 cards." in doc and "No model on this laptop yet" in doc and "See chances (0 open)" in doc
+    assert "Your picture: 5 cards." in doc and "No model can be asked yet" in doc and "See chances (0 open)" in doc
 
 
 def test_advice_from_the_page_asks_only_this_laptops_models(tmp_path, up):
@@ -114,7 +114,8 @@ def test_advice_from_the_page_asks_only_this_laptops_models(tmp_path, up):
         kb = up(_kb(tmp_path, sv.url))
         assert ask(kb, "POST", "/api/cards", {"name": "cards.md", "text": CARDS.read_text(encoding="utf-8")})[0] == 200
         _, _, doc = ask(kb, "GET", "/")
-        assert "Models on this laptop: big, small." in doc and 'data-off' not in doc.split('id="cards"')[0]
+        assert 'Models on this laptop: <bdi dir="ltr">big, small</bdi>.' in doc and 'data-off' not in doc.split('id="cards"')[0]
+        assert 'away</bdi> (no key yet. On the laptop: <bdi dir="ltr"><code>kb keys add away</code>' in doc
         code, _, said = ask(kb, "POST", "/api/advise", {"lang": "en"})
         assert code == 200 and json.loads(said)["say"] == "kb is asking big, small for advice. It can take a few minutes."
         j = _job(kb)

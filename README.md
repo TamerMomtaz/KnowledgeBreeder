@@ -353,6 +353,21 @@ beside your local one. `--as NAME` gives the entry another name and `--model ID`
 Model names and prices change often: `kb models check NAME --allow NAME` shows what your key can really use. These
 entries are outside models, so each run still needs `--allow NAME` (or `--allow a,b` for several).
 
+#### Keeping a key, so the page can use it
+
+A key you export lasts until that terminal closes, and the page never sees it. `kb keys add` keeps it instead:
+
+```bash
+kb keys add gemini
+```
+
+It writes the provider's entry if your models file does not have it yet, asks for the key without showing it as you
+paste, and keeps it in `~/.config/kb/keys.env` (or the file `KB_KEYS` names), which only you can read. The key never
+goes in the repo folder, the models file, the run log or a page, and kb never prints it back. Every kb command fills
+in a kept key that your terminal does not set, so a key you export still wins there; the page reads the file again
+for every job, so there is nothing to restart. `kb keys` lists which paid models the page asks and why any other is
+left out, `kb keys remove gemini` takes a key away, and `kb keys cap` shows or sets the page's daily cap.
+
 Read what each provider says about your data before you send it cards about client work. The command prints it;
 at the time of writing, DeepSeek's privacy policy says it stores data in China and may use it to train its models.
 
@@ -633,15 +648,23 @@ paste into the inbox box as before.
 
 The page has an **Ask kb** box, so the daily jobs need no commands:
 
-- **Ask for advice** runs `kb picture advise` with every model on this laptop, your private list and your lessons.
+- **Ask for advice** runs `kb picture advise` with every model you like, your private list and your lessons: the
+  models on this laptop, and each paid model whose key kb keeps and whose price it knows, under your daily cap.
 - **Find chances in my inbox** runs the scout on what kb read from your inbox.
 - **Add cards from a file** merges the PROJECT CARDs in a file you pick, as `kb picture add` does: nothing is
   overwritten, and a copy of the file is kept in `work/cards`, so kb can say where each card came from.
 - **Check my picture** and **See chances** show `kb picture check` and the open chances as pages.
 
 Each button runs the very command you would type, as a separate process on the laptop, so every rule stays the same.
-The page never passes `--allow`: it asks models on this laptop only, never one on another machine or a key. One job
-runs at a time; you can leave the page while it works, and it shows the result in one sentence when you come back.
+For advice the page passes `--allow` with the paid models it chose, and no others. Before it starts, it adds what
+paid models cost today (from the run log) to what this run will likely cost: the most one advice run from that model
+has cost so far, or before its first run the most it could cost. A paid model that would go over the cap waits for
+tomorrow. The cap is `"daily_cap"` in the models file, $1 until you change it with `kb keys cap` and the dollars. A
+model without a known price is left out, because kb cannot keep it under the cap; add `price_in` and `price_out`
+(dollars per million tokens) to its entry. Lines that are private never go to a model off this laptop, as on the
+command line. The scout asks once for every item in your inbox, so it stays on this laptop's models. The Ask kb box
+shows which models a press would ask, what paid models cost today, and why any model is left out. One job runs at a
+time; you can leave the page while it works, and it shows the result in one sentence when you come back.
 
 To have the page there whenever you log in, without a terminal window, run once:
 

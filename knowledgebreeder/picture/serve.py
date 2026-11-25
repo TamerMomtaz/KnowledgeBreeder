@@ -77,9 +77,20 @@ LABELS = {
         "k_text": "text", "k_link": "link", "k_pdf": "PDF", "k_word": "Word", "k_slides": "slides",
         "k_image": "picture", "k_audio": "voice", "k_other": "file",
         "ask_h": "Ask kb",
-        "ask_note": "Each button runs here on the laptop, with the models on this laptop only. You can leave the page "
-                    "while kb works.",
-        "ask_models": "Models on this laptop: {names}.", "ask_no_models": "No model on this laptop yet: {e}",
+        "ask_note": "Each button runs here on the laptop. Advice asks your models on this laptop and each paid model "
+                    "you keep a key for, up to your daily cap. Private lines never leave the laptop. You can leave "
+                    "the page while kb works.",
+        "ask_models": "Models on this laptop: {names}.", "ask_no_models": "No model can be asked yet: {e}",
+        "ask_paid": "Paid models with your keys: {names}.",
+        "ask_spent": "Spent today on paid models: {s} of your {cap} a day.",
+        "ask_out": "Not asked now: {list}.",
+        "o_no_key_env": "its entry names no key variable",
+        "o_no_key": "no key yet. On the laptop: {cmd}",
+        "o_no_price": "kb does not know its price, so it cannot keep it under your cap. Add price_in and price_out to "
+                      "its entry in the models file",
+        "o_no_sdk": "it needs the Anthropic SDK. On the laptop: {cmd}",
+        "o_cap_zero": "your daily cap is $0. On the laptop: {cmd}",
+        "o_over_cap": "it would pass today's cap, so kb asks it again tomorrow",
         "ask_cards": "Your picture: {n} cards.", "ask_no_picture": "No cards yet. Add a cards file here.",
         "b_advise": "Ask for advice", "b_scout": "Find chances in my inbox", "b_cards": "Add cards from a file",
         "l_check": "Check my picture", "l_chances": "See chances ({n} open)",
@@ -93,6 +104,7 @@ LABELS = {
         "j_scout_nothing": "Nothing new in your inbox to read.", "j_scout_old": "Read before: {n}.",
         "j_failed": "It did not work: {e}", "j_open_run": "Open the advice", "j_open_chances": "See chances",
         "busy": "kb is busy with another job. Wait for it to finish, then press again.",
+        "no_here": "the scout uses the models on this laptop, and none is in the models file",
         "no_inbox_text": "Your inbox has nothing kb can read yet. Send a post, a link or a file first.",
         "cards_done": "New cards: {a}. Updated: {u}. Unchanged: {s}. Cards in your picture now: {n}.",
         "cards_none": "No PROJECT CARD in {name}, so nothing was added.", "cards_changed": "What changed:",
@@ -206,8 +218,18 @@ LABELS = {
         "k_text": "نص", "k_link": "رابط", "k_pdf": "PDF", "k_word": "Word", "k_slides": "شرائح",
         "k_image": "صورة", "k_audio": "صوت", "k_other": "ملف",
         "ask_h": "اسأل kb",
-        "ask_note": "كل زر يعمل هنا على اللابتوب، بنماذج هذا اللابتوب فقط. يمكنك ترك الصفحة أثناء عمل kb.",
-        "ask_models": "النماذج على هذا اللابتوب: {names}.", "ask_no_models": "لا نموذج على هذا اللابتوب بعد: {e}",
+        "ask_note": "كل زر يعمل هنا على اللابتوب. تسأل النصيحة نماذجك على هذا اللابتوب وكل نموذج مدفوع تحفظ له "
+                    "مفتاحًا، في حدود سقفك اليومي. السطور الخاصة لا تغادر اللابتوب أبدًا. يمكنك ترك الصفحة أثناء عمل kb.",
+        "ask_models": "النماذج على هذا اللابتوب: {names}.", "ask_no_models": "لا نموذج يمكن سؤاله بعد: {e}",
+        "ask_paid": "النماذج المدفوعة بمفاتيحك: {names}.",
+        "ask_spent": "أُنفق اليوم على النماذج المدفوعة: {s} من سقفك اليومي {cap}.",
+        "ask_out": "لا يُسأل الآن: {list}.",
+        "o_no_key_env": "مدخله لا يسمّي متغيّر مفتاح",
+        "o_no_key": "لا مفتاح بعد. على اللابتوب: {cmd}",
+        "o_no_price": "لا يعرف kb سعره، فلا يستطيع إبقاءه تحت سقفك. أضف price_in و price_out إلى مدخله في ملف النماذج",
+        "o_no_sdk": "يحتاج Anthropic SDK. على اللابتوب: {cmd}",
+        "o_cap_zero": "سقفك اليومي صفر. على اللابتوب: {cmd}",
+        "o_over_cap": "سيتجاوز سقف اليوم، فيسأله kb مجددًا غدًا",
         "ask_cards": "صورتك: {n} بطاقة.", "ask_no_picture": "لا بطاقات بعد. أضف ملف بطاقات من هنا.",
         "b_advise": "اطلب نصيحة", "b_scout": "ابحث عن فرص في صندوقي", "b_cards": "أضف بطاقات من ملف",
         "l_check": "افحص صورتي", "l_chances": "الفرص (المفتوحة: {n})",
@@ -221,6 +243,7 @@ LABELS = {
         "j_scout_nothing": "لا جديد في صندوقك للقراءة.", "j_scout_old": "قُرئ من قبل: {n}.",
         "j_failed": "لم ينجح: {e}", "j_open_run": "افتح النصيحة", "j_open_chances": "اعرض الفرص",
         "busy": "kb مشغول بمهمة أخرى. انتظر حتى تنتهي، ثم اضغط مرة أخرى.",
+        "no_here": "يستخدم الكشّاف نماذج هذا اللابتوب، ولا يوجد أي منها في ملف النماذج",
         "no_inbox_text": "لا شيء في صندوقك يستطيع kb قراءته بعد. أرسل منشورًا أو رابطًا أو ملفًا أولًا.",
         "cards_done": "بطاقات جديدة: {a}. حُدّثت: {u}. بلا تغيير: {s}. في صورتك الآن: {n}.",
         "cards_none": "لا توجد PROJECT CARD في {name}، فلم يُضف شيء.", "cards_changed": "ما الذي تغيّر:",
@@ -768,12 +791,52 @@ def cards_say(r: dict, lang: str) -> dict:
             "link": "#waits", "link_text": _t(lang, "cards_see"), "reload": bool(r["added"] or r["updated"])}
 
 
-def ask_html(lang: str, cards: int | None, names: list[str], problem: str | None, job: dict, open_chances: int,
+def _dollars(x: float) -> str:
+    return f"${x:,.2f}"
+
+
+def _ltr(x: str, code: bool = False) -> str:
+    """A name, an amount or a command that reads left to right inside Arabic, as an element: copying it gives back
+    the plain text, with no invisible marks that would break a command in the terminal."""
+    inner = f"<code>{_e(x)}</code>" if code else _e(x)
+    return f'<bdi dir="ltr">{inner}</bdi>'
+
+
+def _fill(lang: str, key: str, **parts: str) -> str:
+    """A label as HTML, each {part} replaced by HTML made with _ltr."""
+    out = _e(LABELS[lang][key])
+    for k, v in parts.items():
+        out = out.replace("{" + k + "}", v)
+    return out
+
+
+# the command each reason names, so it can be copied whole; a reason without one is plain words
+_FIX = {"no_key": "kb keys add {name}", "no_sdk": 'pip install -e ".[key]"', "cap_zero": "kb keys cap 1"}
+
+
+def reason(lang: str, why: str, name: str) -> str:
+    """Why a model is not asked now, as plain words, for the terminal."""
+    return LABELS[lang]["o_" + why].replace("{cmd}", _FIX.get(why, "").format(name=name))
+
+
+def ask_html(lang: str, cards: int | None, chosen: dict, job: dict, open_chances: int,
              cards_said: tuple[float, dict] | None = None) -> str:
-    """The Ask kb box: the jobs that needed a terminal, as buttons, and what the last one said."""
-    off = "" if names and cards else " data-off disabled"
-    facts = [_t(lang, "ask_cards", n=cards) if cards else _t(lang, "ask_no_picture"),
-             _t(lang, "ask_models", names=", ".join(names)) if names else _t(lang, "ask_no_models", e=problem or "?")]
+    """The Ask kb box: the jobs that needed a terminal, as buttons, what each would ask, and what the last one said."""
+    here, paid, out = chosen["here"], chosen["paid"], chosen["out"]
+    off = "" if (here or paid) and cards else " data-off disabled"
+    facts = [_e(_t(lang, "ask_cards", n=cards) if cards else _t(lang, "ask_no_picture"))]
+    if here:
+        facts.append(_fill(lang, "ask_models", names=_ltr(", ".join(here))))
+    if not here and not paid:
+        facts.append(_e(_t(lang, "ask_no_models", e=chosen.get("problem") or "?")))
+    if paid:
+        facts.append(_fill(lang, "ask_paid", names=_ltr(", ".join(paid))))
+    if paid or out:
+        facts.append(_fill(lang, "ask_spent", s=_ltr(_dollars(chosen["spent"])), cap=_ltr(_dollars(chosen["cap"]))))
+    if out:
+        named = [f"{_ltr(n)} ({_fill(lang, 'o_' + why, cmd=_ltr(_FIX.get(why, '').format(name=n), code=True))})"
+                 for n, why in out]
+        facts.append(_fill(lang, "ask_out", list=_e("؛ " if lang == "ar" else "; ").join(named)))
     said = job_say(job, lang)
     if cards_said and job.get("status") != "running" and cards_said[0] >= (job.get("ended") or job.get("started") or 0):
         said = cards_say(cards_said[1], lang)                 # the cards file came after the last job
@@ -781,9 +844,9 @@ def ask_html(lang: str, cards: int | None, names: list[str], problem: str | None
     running = job.get("status") == "running"
     return (f'<section class="box ask" id="ask" data-running="{1 if running else 0}"><h2>{_e(_t(lang, "ask_h"))}</h2>'
             f'<p class="soft small">{_e(_t(lang, "ask_note"))}</p>'
-            + "".join(f'<p class="small"><bdi>{_e(x)}</bdi></p>' for x in facts) +
+            + "".join(f'<p class="small"><bdi>{x}</bdi></p>' for x in facts) +
             f'<div class="acts"><button type="button" class="act" id="advise" data-job="advise"{off}>{_e(_t(lang, "b_advise"))}</button>'
-            f'<button type="button" class="act" id="scout" data-job="scout"{" data-off disabled" if not names or not cards else ""}>'
+            f'<button type="button" class="act" id="scout" data-job="scout"{" data-off disabled" if not here or not cards else ""}>'
             f'{_e(_t(lang, "b_scout"))}</button>'
             f'<button type="button" class="act alt" id="cards">{_e(_t(lang, "b_cards"))}</button></div>'
             f'<input type="file" id="cards-pick" accept=".md,.txt,text/markdown,text/plain" hidden>'
@@ -1270,10 +1333,12 @@ class Kb:
         from .. import scout
         return len(scout.open_now(scout.Ledger(self.ledger).rows(), self.today))
 
+    def chosen(self) -> dict:
+        """The models a press of Ask for advice would ask now, and why each other one would not be."""
+        return actions.choose(self.models, self.runlog, self.today or date.today())
+
     def ask(self, lang: str) -> str:
-        names, problem = actions.here_models(self.models)
-        return ask_html(lang, self.cards_count(), names, problem, self.jobs.state(), self.open_chances(),
-                        self.cards_said)
+        return ask_html(lang, self.cards_count(), self.chosen(), self.jobs.state(), self.open_chances(), self.cards_said)
 
     def where_on(self) -> bool:
         try:
@@ -1601,17 +1666,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(409, {"say": _t(lang, "busy"), "cls": "err"})
         if not kb.cards_count():
             return self._json(400, {"say": _t(lang, "ask_no_picture"), "cls": "err"})
-        names, problem = actions.here_models(kb.models)
-        if not names:
-            return self._json(400, {"say": _t(lang, "ask_no_models", e=problem or "?"), "cls": "err"})
+        c = kb.chosen()
         if path == "/api/scout":
             from .. import scout
+            if not c["here"]:                               # the scout asks once per item, so it stays on the laptop
+                return self._json(400, {"say": _t(lang, "ask_no_models", e=c["problem"] or _t(lang, "no_here")),
+                                        "cls": "err"})
             text = kb.inbox.root / "text"
             if not text.is_dir() or not scout.sources([text]):
                 return self._json(400, {"say": _t(lang, "no_inbox_text"), "cls": "err"})
-            argv, kind, who = actions.scout_argv(kb, names[0]), "scout", names[:1]
+            argv, kind, who = actions.scout_argv(kb, c["here"][0]), "scout", c["here"][:1]
         else:
-            argv, kind, who = actions.advise_argv(kb, names, lang), "advise", names
+            if not c["here"] and not c["paid"]:
+                return self._json(400, {"say": _t(lang, "ask_no_models", e=c["problem"] or "?"), "cls": "err"})
+            who = c["here"] + c["paid"]
+            argv, kind = actions.advise_argv(kb, who, lang, allow=c["paid"]), "advise"
         try:
             state = kb.jobs.start(kind, argv, models=who)
         except actions.Busy:
