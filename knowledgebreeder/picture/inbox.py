@@ -4,7 +4,8 @@ Send things from the phone page (kb serve) or with ``kb inbox add``. Everything 
 and nothing is sent anywhere. kb reads what it can here and now:
 
     text and posts      as they are
-    links               kept as text; kb never opens a link on its own
+    links               opened once by kb serve, and the page's words kept beside the link (see links.py);
+                        kb inbox add keeps a link as text only
     PDF                 the text layer, page by page (a scanned PDF has none, and waits for the image reader)
     Word and PowerPoint the words of a .docx or .pptx file
     screenshots         kept whole; they wait for an image reader that runs on this laptop
@@ -189,8 +190,60 @@ def clean_name(name: str | None) -> str:
 
 
 class Inbox:
-    def __init__(self, root: str | Path):
+    """opener reads a link: links.fetch on kb serve, a stand-in in tests, None to keep links as text only."""
+
+    def __init__(self, root: str | Path, opener=None):
         self.root = Path(root)
+        self.opener = opener
+
+    def _links(self, kind: str, text: str, status: str, why: str) -> tuple[str, str, str, dict | None]:
+        """Open the links in a post or a link, when this inbox has an opener. The words found go below the text."""
+        if self.opener is None or kind not in ("text", "link") or not text.strip():
+            return text, status, why, None
+        from . import links
+        if not links.found(text):
+            return text, status, why, None
+        got, missed = links.read_all(text, self.opener)
+        if got:
+            text, status = text.rstrip() + "\n\n" + got, "read"
+        why = "; ".join(x for x in [why, *(f"not opened: {m}" for m in missed)] if x)
+        return text, status, why, {"read": got.count("--- The page at "), "missed": missed}
+
+    def _keep_text(self, item: dict, text: str, note: str | None) -> None:
+        head = [f"Inbox item {item['id']}, received {item['received']}, a {item['kind']}"
+                + (f" called {item['name']}" if item["name"] else "") + "."]
+        if note:
+            head.append(f"The note with it: {note}")
+        rel = item.get("text_file") or f"text/{item['received']}/{item['id']}.txt"
+        self._write(self.root / rel, ("\n".join(head) + "\n\n" + text.strip() + "\n").encode("utf-8"))
+        item["text_file"] = rel
+
+    def open_links(self) -> list[dict]:
+        """Open the links in items kept before kb could open links. Each item is tried once. Returns those tried."""
+        if self.opener is None:
+            return []
+        from . import links
+        done = []
+        for item in self.items():
+            if item.get("kind") not in ("text", "link") or "links" in item:
+                continue
+            f = self.root / item.get("file", "")
+            try:
+                original = _decode(f.read_bytes()) or ""
+            except OSError:
+                continue
+            if not links.found(original):
+                continue
+            text, status, why, tried = self._links(item["kind"], original, item["status"], "")
+            item.update(links=tried, status=status, why=why)
+            if status == "read" and text.strip():
+                text = text[:MAX_TEXT]
+                note = (item.get("notes") or [{}])[0].get("text")
+                self._keep_text(item, text, note)
+                item.update(chars=len(text), preview=" ".join(text.split())[:200])
+            self._write(self._meta_path(item["id"]), json.dumps(item, ensure_ascii=False, indent=1).encode("utf-8"))
+            done.append(item)
+        return done
 
     def _write(self, path: Path, data: bytes) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,6 +286,7 @@ class Inbox:
             return {**item, "new": False}
         kind, ext = sniff(data)
         text, status, why = read(kind, data)
+        text, status, why, tried = self._links(kind, text, status, why)
         cut = len(text) > MAX_TEXT
         text = text[:MAX_TEXT]
         self._write(self.root / "files" / f"{iid}.{ext}", data)
@@ -241,14 +295,10 @@ class Inbox:
                 "via": via, "notes": [{"on": today.isoformat(), "text": note}] if note else [], "status": status,
                 "why": why + ("; kb kept the first part of its text" if cut else ""), "file": f"files/{iid}.{ext}",
                 "text_file": None, "chars": len(text), "preview": " ".join(text.split())[:200]}
+        if tried is not None:
+            item["links"] = tried
         if text.strip():
-            head = [f"Inbox item {iid}, received {item['received']}, a {kind}"
-                    + (f" called {item['name']}" if item["name"] else "") + "."]
-            if note:
-                head.append(f"The note with it: {note}")
-            rel = f"text/{item['received']}/{iid}.txt"
-            self._write(self.root / rel, ("\n".join(head) + "\n\n" + text.strip() + "\n").encode("utf-8"))
-            item["text_file"] = rel
+            self._keep_text(item, text, note)
         self._write(mp, json.dumps(item, ensure_ascii=False, indent=1).encode("utf-8"))
         return {**item, "new": True}
 
@@ -277,18 +327,28 @@ class Inbox:
 
 
 SAY = {
-    "en": {"read": "read: {n} characters", "link": "a link: kept as text, not opened", "empty": "empty",
+    "en": {"read": "read: {n} characters", "link": "a link: kept, but kb could not open it", "empty": "empty",
            "no_text": "no text layer: waits for the image reader", "waits_image": "waits for the image reader",
            "waits_speech": "waits for the speech reader", "not_read": "kept, not read"},
-    "ar": {"read": "قُرئ: {n} حرفًا", "link": "رابط: حُفظ كنص ولم يُفتح", "empty": "فارغ",
+    "ar": {"read": "قُرئ: {n} حرفًا", "link": "رابط: حُفظ لكن kb لم يستطع فتحه", "empty": "فارغ",
            "no_text": "لا نص فيه: ينتظر قارئ الصور", "waits_image": "ينتظر قارئ الصور",
            "waits_speech": "ينتظر قارئ الكلام", "not_read": "محفوظ ولم يُقرأ"},
 }
 
 
+_PAGES = {"en": ", with {n} page(s) its links open to", "ar": "، ومعه {n} من الصفحات التي فتحها من روابطه"}
+_MISSED = {"en": ". Why: {why}.", "ar": ". السبب: {why}."}
+
+
 def say(item: dict, lang: str = "en") -> str:
-    s = SAY.get(lang, SAY["en"])[item["status"]]
-    return s.replace("{n}", f"{item.get('chars', 0):,}")
+    lang = lang if lang in SAY else "en"
+    s = SAY[lang][item["status"]].replace("{n}", f"{item.get('chars', 0):,}")
+    tried = item.get("links") or {}
+    if tried.get("read"):
+        s += _PAGES[lang].replace("{n}", str(tried["read"]))
+    if item["status"] == "link" and tried.get("missed"):
+        s += _MISSED[lang].replace("{why}", tried["missed"][0].split(": ", 1)[-1])
+    return s
 
 
 def list_md(items: list[dict], root: str | Path) -> str:
