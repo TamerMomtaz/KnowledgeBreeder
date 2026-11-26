@@ -30,13 +30,13 @@ MAX_FILE = 2_000_000
 # a heading's words decide what its lines are; the first rule that matches wins
 _RULES = (
     (re.compile(r"timeline|sources?\b|in one minute|how it works|how it was built|reverse|what kb needs|stack|"
-                r"rejected|watch list|run cost|build order", re.I), None),
+                r"rejected|watch list|run cost|build order|song|lyrics", re.I), None),
     (re.compile(r"lesson|moral", re.I), "lesson"),
     (re.compile(r"forgot|keep an eye|checks?\b|reality", re.I), "check"),
     (re.compile(r"weak", re.I), "weak"),
     (re.compile(r"strength", re.I), "strength"),
     (re.compile(r"book|resonat|principle|highlight", re.I), "principle"),
-    (re.compile(r"idea|together|shares|match|angle|picks?\b|multiplier", re.I), "idea"),
+    (re.compile(r"idea|together|shares|match|angle|picks?\b|multiplier|features?\b", re.I), "idea"),
 )
 _ITEM = re.compile(r"^\s{0,3}(?:[-*]|\d{1,2}[.)])\s+(.*)$")
 _BOLD_PARA = re.compile(r"^\*\*(.+?)\*\*\s*(.*)$")

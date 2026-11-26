@@ -35,6 +35,8 @@
 
     kb models init / list / check               which models kb may ask, and where each one lives
     kb agents                                   your agents' register, and what in it needs a person's look
+    kb books add "Algorithms to Live By"        put a book on the shelf for the frame-outer
+    kb books frame --model kimi --allow kimi    frame the waiting books: framework, a platform, features, a song
     kb models pick RUN NAME                     record which model's answer you chose
     kb models add gemini                        add a provider kb knows (openai, gemini, kimi, deepseek, claude)
     kb keys add gemini                          keep its key where the page can use it; nothing shows as you paste
@@ -221,6 +223,19 @@ def main(argv: list[str] | None = None) -> int:
     ag.add_argument("--private", default=pfile, metavar="PATH")
     ag.add_argument("--today"); ag.add_argument("--quiet-days", type=int, default=90)
     ag.add_argument("--json", action="store_true"); ag.add_argument("--force", action="store_true")
+    bk = sub.add_parser("books", help="the frame-outer: a book title becomes its framework, a platform, features and a song")
+    bk.add_argument("action", nargs="?", choices=["list", "add", "frame", "show"], default="list",
+                    help="list (the default) shows your books; add puts titles on the shelf; frame frames the waiting "
+                         "ones; show prints one book's frame")
+    bk.add_argument("rest", nargs="*", help="for add, the titles, each in quotes; for frame, only these titles; for "
+                                            "show, the title")
+    bk.add_argument("--books", default=os.environ.get("KB_BOOKS", "work/books"), help="the books folder")
+    bk.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
+    bk.add_argument("--models-file", default=mfile); bk.add_argument("--runlog", default=runlog)
+    bk.add_argument("--private", default=pfile, metavar="PATH"); bk.add_argument("--model")
+    bk.add_argument("--allow", action="append", default=[], metavar="NAME")
+    bk.add_argument("--lang", choices=["en", "ar"], default="en"); bk.add_argument("--today")
+    bk.add_argument("--json", action="store_true")
     sv = sub.add_parser("serve", help="your advice runs as pages, served on this machine only")
     sv.add_argument("--port", type=int, default=8765)
     sv.add_argument("--runlog", default=runlog)
@@ -307,11 +322,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd != "serve":                                     # kb serve reads the keys file again for every job
         from . import keys
         keys.fill()
-    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox", "keys"):
+    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox", "keys", "books"):
         from .models import ModelError, Refused
         try:
             return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve,
-                    "agents": _agents, "inbox": _inbox, "keys": _keys}[a.cmd](a, dump)
+                    "agents": _agents, "inbox": _inbox, "keys": _keys, "books": _books}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
@@ -1079,6 +1094,75 @@ def _agents(a, dump) -> int:
     every = mine + kb
     found = agents.review(every, today, Private.load(a.private), a.quiet_days)
     dump(agents.as_json(every, found)) if a.json else print(agents.register_md(every, found, today, a.file))
+    return 0
+
+
+def _books(a, dump) -> int:
+    """kb books: the frame-outer's shelf. Titles in, each book's framework, platform, features and song out."""
+    from datetime import date
+
+    from . import models
+    from .picture import Picture, books
+    from .picture.private import Private
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    shelf = books.Shelf(a.books)
+    if a.action == "add":
+        if not a.rest:
+            raise KeyError('give the titles, each in quotes, for example: kb books add "Algorithms to Live By"')
+        new = shelf.add(a.rest, today, via="laptop")
+        print(f"On the shelf: {len(new)} new" + (f" ({'; '.join(new)})" if new else "") +
+              f". Waiting to be framed: {len(shelf.waiting())}.")
+        if new:
+            print("Frame them from the page (Your books, Frame them out), or here with: kb books frame")
+        return 0
+    if a.action == "show":
+        title = " ".join(a.rest)
+        key = books.slug(title)
+        f = shelf.frame(key)
+        if not f:
+            raise KeyError(f"no frame for '{title}' yet. See your books with: kb books")
+        dump(f) if a.json else print(books.md(f["title"], f, f.get("worker", "?"), f.get("framed", "?")), end="")
+        return 0
+    if a.action == "frame":
+        book = models.load(a.models_file)
+        m = book.get(a.model)
+        pic = Picture.load(a.file) if os.path.exists(a.file) else None
+        cards = pic.cards if pic else {}
+        from .picture.advise import guard_for
+        guard = guard_for(pic, Private.load(a.private)) if pic else Private.load(a.private)
+        from .runlog import RunLog
+        log = RunLog(a.runlog)
+        try:
+            r = books.frame_waiting(shelf, os.path.join(os.path.dirname(os.path.abspath(a.books)), "ideas"), cards, m,
+                                    guard, today, a.lang, a.allow, log, only=a.rest or None)
+        finally:
+            log.close()
+        if a.json:
+            dump(r)
+            return 0 if not r["books"] or any(b["status"] == "framed" for b in r["books"]) else 2
+        if not r["books"]:
+            print("No book waits to be framed. Put one on the shelf with: kb books add, then the title in quotes.")
+            return 0
+        for b in r["books"]:
+            if b["status"] == "failed":
+                print(f"- {b['title']}: not framed. {b['error']}")
+            elif not b["known"]:
+                print(f"- {b['title']}: {m.name} does not know this book well enough, so it made nothing up.")
+            else:
+                print(f"- {b['title']}: framed. {b['ideas']} lines are now in Your ideas, {b['features']} of them "
+                      f"features for your platforms." + (f" Cost ${b['cost']:.4f}." if b.get("cost") else ""))
+        if r["left"]:
+            print(f"{r['left']} more wait; kb frames up to {books.MAX_A_RUN} a time. Run it again for the rest.")
+        return 0
+    rows = shelf.items()
+    if a.json:
+        dump([{"key": k, **v} for k, v in rows])
+        return 0
+    if not rows:
+        print('Your shelf is empty. Add a book with: kb books add "Algorithms to Live By"')
+        return 0
+    for k, v in rows:
+        print(f"- {v['title']}  ({v.get('status')}, added {v.get('added')})")
     return 0
 
 

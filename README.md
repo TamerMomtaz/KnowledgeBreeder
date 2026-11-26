@@ -720,6 +720,29 @@ kb picture engines
 
 The math comes from the research "Mathematical Engines of Plan→T", carried over from a plant to your own work.
 
+#### Your books: the frame-outer
+
+kb has a crew: what comes in is routed to the agent that owns it (`knowledgebreeder/picture/crew.py`, plain rules,
+no model guessing). The first agent is the frame-outer. Give it a book title, in the Your books box, or as a line
+`book: Algorithms to Live By` sent to the inbox, and it gives back four things:
+
+1. the book's framework: its principles, each with what it says and how you would use it;
+2. a platform of its own that would carry out the book's ideas;
+3. features for the platforms on your cards, each naming the card and the principle it comes from (a platform that
+   is not one of your cards is dropped);
+4. a song: verses that carry the principles and a chorus with the book's big idea, so singing it brings them back.
+
+It works from what the model knows of the book, not your clips, and says when it does not know a book. It asks the
+first paid model under your daily cap (they know books best), else a model on this laptop, and sends only the title
+and the name and first line of each card that is not private. The frames are kept in `work/books/`, and their lines
+land in Your ideas, where you tick what rings true.
+
+```
+kb books add "Algorithms to Live By"
+kb books frame --model kimi --allow kimi
+kb books show "Algorithms to Live By"
+```
+
 #### Your ideas
 
 One ledger of every idea, lesson, check and book principle kb has read, each with the file and line it came from.

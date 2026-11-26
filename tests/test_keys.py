@@ -56,6 +56,8 @@ def test_kb_keys_adds_a_provider_keeps_its_key_and_never_shows_it(tmp_path, monk
     assert KEY not in out and "Added 'openai'" in out and "https://platform.openai.com/api-keys" in out
     assert "The page now asks openai" in out and "kb models check openai --allow openai" in out
     assert keys.load() == {"OPENAI_API_KEY": KEY}
+    unpriced = {k: v for k, v in PRESETS["gemini"]["entry"].items() if not k.startswith("price")}
+    monkeypatch.setitem(PRESETS["gemini"], "entry", unpriced)                    # a provider whose price kb does not know
     assert main(["keys", "add", "\u2068gemini\u2069", "--models-file", str(mfile)]) == 0   # copied from the Arabic page
     assert "does not know gemini's price, so the page leaves it out" in capsys.readouterr().out
     assert main(["keys", "--models-file", str(mfile), "--runlog", db]) == 0
@@ -81,7 +83,7 @@ def _book(tmp_path, cap=None):
     book = {"default": "big", "models": {
         "big": {"url": "http://127.0.0.1:9/v1", "model": "big"},
         "openai": dict(PRESETS["openai"]["entry"]),
-        "gemini": dict(PRESETS["gemini"]["entry"]),                              # no price
+        "gemini": {k: v for k, v in PRESETS["gemini"]["entry"].items() if not k.startswith("price")},   # no price
         "kimi": dict(PRESETS["kimi"]["entry"], price_in=1.0, price_out=4.0),     # no key
         "deepseek": dict(PRESETS["deepseek"]["entry"])}}
     if cap is not None:

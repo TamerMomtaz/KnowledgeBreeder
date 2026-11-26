@@ -36,7 +36,7 @@ from urllib.parse import parse_qs, urlsplit
 from .. import explain, margins, theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, engines, grow, icon, ideas, nudge, page, rating
+from . import actions, books, crew, engines, grow, icon, ideas, nudge, page, rating
 from . import inbox as inb
 from . import lessons as les
 from . import private as prv
@@ -184,6 +184,23 @@ LABELS = {
         "i_k_check": "check", "i_k_lesson": "lesson", "i_k_idea": "idea", "i_k_principle": "book",
         "i_k_weak": "weak spot", "i_k_part": "part to reuse", "i_k_strength": "strength",
         "ideas_kept": "Kept {n} ideas from {name}.",
+        "books_h": "Your books",
+        "books_note": "The frame-outer, kb's agent for books. Give it a title: it gives back the book's framework, a "
+                      "platform of its own, features for the platforms on your cards, and a song to remember it by. "
+                      "It works from what the model knows of the book, not your clips; tick what rings true in Your ideas.",
+        "books_ph": "Book titles, one a line", "b_frame": "Frame them out",
+        "books_who": "It frames with {who}.", "books_no_model": "No model can be asked now: {e}",
+        "books_none": "No books yet. Write a title above, or send book: and the title to your inbox.",
+        "books_added": "On the shelf: {n} new.", "books_no_titles": "Write at least one title first.",
+        "books_waiting": "waiting", "books_framed": "framed", "books_failed": "not framed",
+        "books_unknown": "The model does not know this book well enough, so it made nothing up.",
+        "bk_framework": "The framework", "bk_platform": "A platform of its own", "bk_features": "Features for your platforms",
+        "bk_song": "The song", "bk_unsure": "Least sure of", "bk_by": "by {who}", "bk_rests": "Rests on: {p}.",
+        "bk_from": "from", "bk_use": "Use:",
+        "j_frame": "The frame-outer is reading your books with {who}.",
+        "j_frame_done": "Framed: {n}. Their lines are in Your ideas.", "j_frame_some": "Framed: {n}. Not framed: {f} ({e}).",
+        "j_frame_none": "No book was framed: {e}", "j_frame_left": "{n} more wait: press Frame them out again.",
+        "in_books": "Books: {n}, sent to the frame-outer (Your books).",
         "eng_h": "Where your work waits",
         "eng_note": "Worked out from your cards on this laptop, with no model: what waits on whom, and how long things "
                     "wait. The math comes from your research Mathematical Engines of Plan→T.",
@@ -336,6 +353,23 @@ LABELS = {
         "i_k_check": "فحص", "i_k_lesson": "درس", "i_k_idea": "فكرة", "i_k_principle": "كتاب",
         "i_k_weak": "نقطة ضعف", "i_k_part": "جزء يُعاد استخدامه", "i_k_strength": "نقطة قوة",
         "ideas_kept": "حُفظت {n} فكرة من {name}.",
+        "books_h": "كتبك",
+        "books_note": "مُستخرِج الإطار، وكيل kb للكتب. أعطه عنوانًا فيعيد إليك إطار الكتاب، ومنصة خاصة به، وميزات "
+                      "للمنصات التي على بطاقاتك، وأغنية تتذكره بها. يعمل مما يعرفه النموذج عن الكتاب لا من مقاطعك؛ "
+                      "علّم ما يبدو لك صحيحًا في «أفكارك».",
+        "books_ph": "عناوين الكتب، عنوان في كل سطر", "b_frame": "استخرج أطرها",
+        "books_who": "يعمل بـ {who}.", "books_no_model": "لا يمكن سؤال أي نموذج الآن: {e}",
+        "books_none": "لا كتب بعد. اكتب عنوانًا في الأعلى، أو أرسل إلى صندوقك كتاب: ثم العنوان.",
+        "books_added": "على الرف: {n} جديد.", "books_no_titles": "اكتب عنوانًا واحدًا على الأقل أولًا.",
+        "books_waiting": "ينتظر", "books_framed": "استُخرج إطاره", "books_failed": "لم يُستخرج",
+        "books_unknown": "النموذج لا يعرف هذا الكتاب جيدًا بما يكفي، فلم يختلق شيئًا.",
+        "bk_framework": "الإطار", "bk_platform": "منصة خاصة به", "bk_features": "ميزات لمنصاتك",
+        "bk_song": "الأغنية", "bk_unsure": "أقل ما هو متأكد منه", "bk_by": "تأليف {who}", "bk_rests": "يقوم على: {p}.",
+        "bk_from": "من", "bk_use": "الاستعمال:",
+        "j_frame": "مُستخرِج الإطار يقرأ كتبك بـ {who}.",
+        "j_frame_done": "استُخرج: {n}. أسطرها في «أفكارك».", "j_frame_some": "استُخرج: {n}. لم يُستخرج: {f} ({e}).",
+        "j_frame_none": "لم يُستخرج إطار أي كتاب: {e}", "j_frame_left": "ينتظر {n} آخر: اضغط «استخرج أطرها» مرة أخرى.",
+        "in_books": "كتب: {n}، أُرسلت إلى مُستخرِج الإطار («كتبك»).",
         "eng_h": "أين ينتظر عملك",
         "eng_note": "محسوب من بطاقاتك على هذا اللابتوب، دون أي نموذج: ما ينتظر مَن، وكم تنتظر الأشياء. الحساب مأخوذ من "
                     "بحثك Mathematical Engines of Plan→T.",
@@ -459,6 +493,7 @@ button:disabled{opacity:.6;cursor:default}
 .pending li{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px dashed var(--line);padding:4px 0}
 .pending span{overflow-wrap:anywhere}
 .pending .btn{min-height:40px;min-width:44px;padding:0 12px;font-size:1.1rem}
+.books textarea{min-height:4.5em}.book-list details>summary{cursor:pointer;list-style:none}.book-list h4{margin:10px 0 4px}.song{white-space:pre-wrap;font:inherit;background:var(--card);border-inline-start:3px solid var(--line);padding:8px 10px;margin:4px 0}
 .inbox{list-style:none;margin:14px 0 0;padding:0}
 .inbox li{display:grid;grid-template-columns:4.6em minmax(0,1fr);column-gap:10px;row-gap:2px;border-top:1px solid var(--line);padding:10px 2px}
 .kind{grid-row:1/span 4;font-weight:700}
@@ -595,6 +630,28 @@ if (ask){
     r.readAsText(f);
   });
   if (ask.getAttribute("data-running") === "1"){ jobLock(true); jobPoll(); }
+}
+
+var bgo = document.getElementById("book-go");
+if (bgo){
+  var bsay = document.getElementById("book-say"), btitles = document.getElementById("book-titles"),
+      bbox = document.getElementById("books");
+  var bshow = function(j){ bsay.textContent = j.say || ""; bsay.className = j.cls || ""; };
+  var bpoll = function(){
+    fetch("/api/job?lang=" + L.lang).then(function(r){ return r.json(); }).then(function(j){
+      bshow(j);
+      if (j.status === "running") setTimeout(bpoll, 3000); else again("#books");
+    }).catch(function(){ setTimeout(bpoll, 5000); });
+  };
+  bgo.addEventListener("click", function(){
+    bgo.disabled = true; bshow({say: L.starting});
+    fetch("/api/books", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
+                         body: JSON.stringify({titles: btitles.value, lang: L.lang})})
+      .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.say || j.error || String(r.status)); return j; }); })
+      .then(function(j){ bshow(j); btitles.value = ""; if (j.status === "running") bpoll(); else again("#books"); })
+      .catch(function(e){ bshow({say: e.message, cls: "err"}); bgo.disabled = false; });
+  });
+  if (bbox.getAttribute("data-running") === "1"){ bgo.disabled = true; bpoll(); }
 }
 
 function again(part){             // load the page again at a box; a change of the #part alone would not reload it
@@ -750,14 +807,15 @@ function one(body){
     .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || String(r.status)); return j; }); });
 }
 send.addEventListener("click", function(){
-  var text = post.value.trim(), jobs = [], note = "", kept = 0, again = 0, cards = 0, done = 0;
+  var text = post.value.trim(), jobs = [], note = "", kept = 0, again = 0, cards = 0, books = 0, done = 0;
   if (text && (!files.length || text.length > L.short || /^https?:\\/\\/\\S+$/i.test(text))) jobs.push(function(){ return one({text: text}); });
   else note = text;
   files.forEach(function(f){ jobs.push(function(){ return b64(f.blob).then(function(d){ return one({name: f.name, data: d, note: note}); }); }); });
   busy = true; can(); send.textContent = L.sending; tell("");
   jobs.reduce(function(p, job){ return p.then(function(){ return job().then(function(j){
+      books += j.books || 0;
       if (j.kind === "cards") cards++; else if (j.new) kept++; else again++; done++; tell(done + " / " + jobs.length); }); }); }, Promise.resolve())
-    .then(function(){ location.replace("/?lang=" + L.lang + "&kept=" + kept + "&again=" + again + "&cards=" + cards + "#inbox"); })
+    .then(function(){ location.replace("/?lang=" + L.lang + "&kept=" + kept + "&again=" + again + "&cards=" + cards + "&books=" + books + "#inbox"); })
     .catch(function(e){ busy = false; send.textContent = L.send; can(); tell(L.not_sent.replace("{e}", e.message), "err"); });
 });
 })();
@@ -769,7 +827,8 @@ def inbox_html(box: list[dict], lang: str, got: dict | None = None, show: int = 
     got = got or {}
     said = " ".join(x for x in (_t(lang, "sent", n=got["kept"]) if got.get("kept") else "",
                                 _t(lang, "again", n=got["again"]) if got.get("again") else "",
-                                _t(lang, "in_cards", n=got["cards"]) if got.get("cards") else "") if x)
+                                _t(lang, "in_cards", n=got["cards"]) if got.get("cards") else "",
+                                _t(lang, "in_books", n=got["books"]) if got.get("books") else "") if x)
     rows = []
     for x in box[:show]:
         what = x.get("name") or x.get("preview") or "-"
@@ -795,7 +854,8 @@ def job_say(state: dict, lang: str) -> dict:
     st, kind = state.get("status", "idle"), state.get("kind")
     out = {"status": st, "kind": kind, "say": "", "cls": ""}
     if st == "running":
-        out["say"] = _t(lang, "j_advise" if kind == "advise" else "j_scout", who=", ".join(state.get("models") or []))
+        key = {"advise": "j_advise", "frame": "j_frame"}.get(kind, "j_scout")
+        out["say"] = _t(lang, key, who=", ".join(state.get("models") or []))
     elif st == "failed":
         out.update(say=_t(lang, "j_failed", e=state.get("error") or "?"), cls="err")
     elif st == "done" and kind == "advise":
@@ -809,6 +869,20 @@ def job_say(state: dict, lang: str) -> dict:
                 out.update(link=f"/run/{a['run']}?lang={lang}", link_text=_t(lang, "j_open_run"))
         else:
             out.update(say=_t(lang, "j_advice_none", bad=bad or "-", e=e or "?"), cls="err")
+    elif st == "done" and kind == "frame":
+        r = state.get("result") or {}
+        bs = r.get("books") or []
+        ok = [b for b in bs if b.get("status") == "framed"]
+        bad = [b for b in bs if b.get("status") == "failed"]
+        if ok and bad:
+            say, cls = _t(lang, "j_frame_some", n=len(ok), f=len(bad), e=bad[0].get("error", "?")), "kept"
+        elif ok or not bs:
+            say, cls = _t(lang, "j_frame_done", n=len(ok)), "kept"
+        else:
+            say, cls = _t(lang, "j_frame_none", e=bad[0].get("error", "?") if bad else "?"), "err"
+        if r.get("left"):
+            say += " " + _t(lang, "j_frame_left", n=r["left"])
+        out.update(say=say, cls=cls, link="#books", link_text=_t(lang, "books_h"))
     elif st == "done" and kind == "scout":
         c = actions.scout_summary(state.get("result") or {})
         say = _t(lang, "j_scout_done", n=c["read"], c=c["chances"], u=c["unsure"]) if c["read"] else _t(lang, "j_scout_nothing")
@@ -1147,6 +1221,59 @@ def ideas_box(lang: str, v: dict | None) -> str:
     return "".join(out) + "</section>"
 
 
+def books_box(lang: str, shelf: books.Shelf, who: list[str], problem: str | None, running: bool) -> str:
+    """Your books: titles in, and each framed book's framework, platform, features and song, folded."""
+    rows = shelf.items()
+    say = (_t(lang, "books_who", who=", ".join(who)) if who else _t(lang, "books_no_model", e=problem or "?"))
+    out = [f'<section class="box books" id="books" data-running="{1 if running else 0}"><h2>{_e(_t(lang, "books_h"))}'
+           f'{f" ({len(rows)})" if rows else ""}</h2><p class="soft small">{_e(_t(lang, "books_note"))}</p>'
+           f'<textarea id="book-titles" dir="auto" rows="3" placeholder="{_e(_t(lang, "books_ph"))}" '
+           f'aria-label="{_e(_t(lang, "books_ph"))}"></textarea>'
+           f'<div class="row"><button type="button" id="book-go"{"" if who else " disabled"}>{_e(_t(lang, "b_frame"))}</button>'
+           f'<span id="book-say" role="status" class="soft small">{_e(say)}</span></div>']
+    if not rows:
+        return "".join(out) + f'<p class="soft">{_e(_t(lang, "books_none"))}</p></section>'
+    items = []
+    for key, v in rows[:30]:
+        state = _t(lang, "books_" + v.get("status", "waiting")) if v.get("status") in books.STATES else v.get("status")
+        f = shelf.frame(key) if v.get("status") == "framed" else None
+        head = (f'<span class="c"><bdi>{_e(v["title"])}</bdi></span><span class="why">{_e(state)}'
+                + (f' · <bdi>{_e(v.get("worker") or "")}</bdi>' if v.get("worker") else "")
+                + (f' · {_e(v["error"][:160])}' if v.get("status") == "failed" and v.get("error") else "") + '</span>')
+        if not f:
+            items.append(f"<li>{head}</li>")
+            continue
+        if not f.get("known"):
+            items.append(f'<li>{head}<p class="soft small">{_e(_t(lang, "books_unknown"))}</p></li>')
+            continue
+        parts = []
+        if f.get("author"):
+            parts.append(f'<p class="soft small">{_e(_t(lang, "bk_by", who=f["author"]))}</p>')
+        parts.append(f'<h4>{_e(_t(lang, "bk_framework"))}</h4><ol>' + "".join(
+            f'<li><b><bdi>{_e(x["name"])}</bdi></b> <bdi>{_e(x["says"])}</bdi> <i>{_e(_t(lang, "bk_use"))}</i> '
+            f'<bdi>{_e(x["use"])}</bdi></li>' for x in f["framework"]) + "</ol>")
+        pl = f.get("platform") or {}
+        if pl.get("name"):
+            parts.append(f'<h4>{_e(_t(lang, "bk_platform"))}</h4><p><b><bdi>{_e(pl["name"])}</bdi></b> <bdi>{_e(pl["what"])}</bdi></p>'
+                         + ("<ul>" + "".join(f"<li><bdi>{_e(h)}</bdi></li>" for h in pl.get("how") or []) + "</ul>"
+                            if pl.get("how") else "")
+                         + (f'<p class="soft small">{_e(_t(lang, "bk_rests", p=", ".join(pl["principles"])))}</p>'
+                            if pl.get("principles") else ""))
+        if f.get("features"):
+            parts.append(f'<h4>{_e(_t(lang, "bk_features"))}</h4><ul>' + "".join(
+                f'<li><b><bdi>{_e(x["platform"])}</bdi></b>: <bdi>{_e(x["feature"])}</bdi> '
+                f'<span class="soft small">({_e(_t(lang, "bk_from"))} <bdi>{_e(x["principle"])}</bdi>) <bdi>{_e(x["why"])}</bdi></span></li>'
+                for x in f["features"]) + "</ul>")
+        if f.get("song", {}).get("lyrics"):
+            parts.append(f'<h4>{_e(_t(lang, "bk_song"))}: <bdi>{_e(f["song"].get("title") or v["title"])}</bdi></h4>'
+                         f'<pre class="song" dir="auto">{_e(f["song"]["lyrics"])}</pre>')
+        if f.get("unsure"):
+            parts.append(f'<p class="soft small">{_e(_t(lang, "bk_unsure"))}: <bdi>{_e(f["unsure"])}</bdi></p>')
+        items.append(f'<li><details><summary>{head}</summary>{"".join(parts)}</details></li>')
+    out.append(f'<ul class="g-list book-list">{"".join(items)}</ul>')
+    return "".join(out) + "</section>"
+
+
 def waits_box(lang: str, r: dict | None, problem: str | None = None) -> str:
     """Where your work waits: what frees the most, and how long things wait. Worked out from the cards, no model."""
     head = (f'<section class="box eng" id="waits"><h2>{_e(_t(lang, "eng_h"))}</h2>'
@@ -1291,7 +1418,8 @@ def manifest(lang: str) -> dict:
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
           ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None,
-          nudges: str | None = None, grows: str | None = None, ideas_html: str | None = None) -> str:
+          nudges: str | None = None, grows: str | None = None, ideas_html: str | None = None,
+          books_html: str | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -1329,10 +1457,10 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main = (soon or "") + inbox_html(box, lang, got) + (ideas_html or "") + (waits or "") + (grows or "") + (where or "")
+        main = (soon or "") + inbox_html(box, lang, got) + (ideas_html or "") + (books_html or "") + (waits or "") + (grows or "") + (where or "")
         side = (ask or "") + (nudges or "") + runs_box + lessons_box
     else:
-        main = (soon or "") + runs_box + (ideas_html or "") + (waits or "") + (grows or "") + (where or "")
+        main = (soon or "") + runs_box + (ideas_html or "") + (books_html or "") + (waits or "") + (grows or "") + (where or "")
         side = (ask or "") + (nudges or "") + lessons_box
     blob = json.dumps({**{k: LABELS[lang][k] for k in keys}, "lang": lang, "short": SHORT_NOTE, "max_file": inb.MAX_FILE},
                       ensure_ascii=False).replace("<", "\\u003c")
@@ -1385,6 +1513,7 @@ class Kb:
         self.grow_marks = grow.Marks(work / "grow.json")
         self.ideas_dir = work / "ideas"
         self.ideas_book = ideas.Book(work / "ideas.json")
+        self.shelf = books.Shelf(work / "books")
 
     def start_links(self, opener=None) -> threading.Thread:
         """From now on the inbox opens the links you send it; the links kept before are opened in the background."""
@@ -1506,6 +1635,37 @@ class Kb:
     def ideas_html(self, lang: str) -> str:
         return ideas_box(lang, self.ideas_view())
 
+    def framer(self) -> tuple[list[str], list[str], str | None]:
+        """(the model the frame-outer asks, the paid ones of them to allow, why none). A paid model knows books best,
+        so the first paid one under your cap goes first; else the first model on this laptop."""
+        c = self.chosen()
+        if c["paid"]:
+            return c["paid"][:1], c["paid"][:1], None
+        if c["here"]:
+            return c["here"][:1], [], None
+        return [], [], c["problem"] or "no model"
+
+    def books_html(self, lang: str) -> str:
+        who, _, problem = self.framer()
+        return books_box(lang, self.shelf, who, problem,
+                         self.jobs.state().get("status") == "running" and self.jobs.state().get("kind") == "frame")
+
+    def frame_start(self, lang: str) -> dict | None:
+        """Start the frame-outer on the waiting books, when there are some and nothing else runs. None when not."""
+        if not self.shelf.waiting():
+            return None
+        who, allow, _ = self.framer()
+        if not who or self.jobs.state()["status"] == "running":
+            return None
+        day = ["--today", self.today.isoformat()] if self.today else []
+        argv = actions.cli("books", "frame", "--books", self.shelf.folder, "--file", self.picture, "--models-file",
+                           self.models, "--runlog", self.runlog, "--private", self.private, "--model", who[0],
+                           "--lang", lang, "--json", *(["--allow", ",".join(allow)] if allow else []), *day)
+        try:
+            return self.jobs.start("frame", argv, models=who)
+        except actions.Busy:
+            return None
+
     def nudge_html(self, lang: str) -> str:
         return nudge_box(lang, self.nudge.state())
 
@@ -1616,12 +1776,13 @@ class Handler(BaseHTTPRequestHandler):
                 log = self.kb.log()
                 try:
                     q = parse_qs(urlsplit(self.path).query)
-                    got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again", "cards") and v and v[0].isdigit()}
+                    got = {k: int(v[0]) for k, v in q.items() if k in ("kept", "again", "cards", "books") and v and v[0].isdigit()}
                     body = index(log, les.read(self.kb.lessons), lang, self.headers.get("Tailscale-User-Login"),
                                  today=self.kb.today, box=self.kb.inbox.items(), got=got, ask=self.kb.ask(lang),
                                  where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
                                  soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang),
-                                 grows=self.kb.grow_html(lang), ideas_html=self.kb.ideas_html(lang))
+                                 grows=self.kb.grow_html(lang), ideas_html=self.kb.ideas_html(lang),
+                                 books_html=self.kb.books_html(lang))
                 finally:
                     if log:
                         log.close()
@@ -1715,6 +1876,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.kb.grow_marks.set(str(body.get("id") or ""), str(body.get("state") or ""),
                                        self.kb.today or date.today())
                 return self._json(200, {"ok": True})
+            if path == "/api/books":
+                return self._books(body)
             if path == "/api/ideas":
                 self.kb.ideas_book.mark(str(body.get("id") or ""), str(body.get("state") or ""),
                                         self.kb.today or date.today())
@@ -1871,6 +2034,22 @@ class Handler(BaseHTTPRequestHandler):
             item = self.kb.inbox.add_text(f"{title}\n{url}" if title and title != url else url, None, today, via="laptop")
         return {"say": _t(lang, "kept_one"), "id": item["id"], "new": item["new"]}
 
+    def _books(self, body: dict) -> None:
+        """Titles from the Your books box: onto the shelf, and the frame-outer starts on every book that waits."""
+        lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+        titles = [t for t in (" ".join(x.split()) for x in str(body.get("titles") or "").splitlines()) if t][:30]
+        new = self.kb.shelf.add(titles, self.kb.today or date.today(), via="page")
+        if not self.kb.shelf.waiting():
+            return self._json(400 if not titles else 200, {"say": _t(lang, "books_no_titles" if not titles else
+                                                                       "books_added", n=len(new)), "cls": "err" if not titles else "kept"})
+        if self.kb.jobs.state()["status"] == "running":
+            return self._json(409, {"say": _t(lang, "busy"), "cls": "err"})
+        state = self.kb.frame_start(lang)
+        if state is None:
+            _, _, problem = self.kb.framer()
+            return self._json(400, {"say": _t(lang, "books_no_model", e=problem or "?"), "cls": "err"})
+        return self._json(200, {"ok": True, "added": len(new), **job_say(state, lang)})
+
     def _inbox(self, body: dict) -> dict:
         """One item a request: {"text": ...} for a post or a link, or {"name", "data" (base64), "note"} for a file."""
         today = self.kb.today or date.today()
@@ -1891,6 +2070,12 @@ class Handler(BaseHTTPRequestHandler):
             if (r := self._cards_in(text.strip().encode("utf-8"), "pasted cards.md", today)) is not None:
                 return r
             item = self.kb.inbox.add_text(text, None, today, via="phone")
+            routed = crew.route(text)                     # the router: book lines go to the frame-outer, and so on
+            if routed.get("frame-outer"):
+                self.kb.shelf.add(routed["frame-outer"], today, via="inbox")
+                self.kb.frame_start(self.kb.lang)           # starts when nothing else runs; else they wait on the shelf
+                return {**{k: item[k] for k in ("id", "kind", "status", "new", "name")},
+                        "books": len(routed["frame-outer"])}
         return {k: item[k] for k in ("id", "kind", "status", "new", "name")}
 
     def _cards_in(self, raw: bytes, name: str, today: date) -> dict | None:
