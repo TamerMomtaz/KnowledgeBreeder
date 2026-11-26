@@ -105,6 +105,16 @@ TEXT = {
                             ("i_later", "Moves it out of the way for now."),
                             ("i_done", "You applied it. It counts in Done in 30 days.")],
             },
+            "books": {
+                "what": "The frame-outer, kb's agent for books. A title becomes four things: the book's framework (its "
+                        "principles), a platform of its own, features for the platforms on your cards, and a song "
+                        "that carries the ideas.",
+                "how": "Write titles, one a line, or send book: and the title to your inbox: the router hands it here. "
+                       "It works from what the model knows of the book, not your Audible clips, and says when it does "
+                       "not know a book. Its lines land in Your ideas, where you tick what rings true.",
+                "buttons": [("b_frame", "Puts the titles on the shelf and frames every book that waits, up to five a "
+                                        "press, with the best model kb may ask under your daily cap.")],
+            },
             "grow": {
                 "what": "kb's own to-do list, taken from your cards: what is unfinished on kb's card, and the parts and "
                         "ideas on other cards that name kb.",
@@ -210,6 +220,15 @@ TEXT = {
                 "buttons": [("i_useful", "يحفظ السطر تحت «مفيد» ليعيده kb إليك."),
                             ("i_later", "يبعده عن الطريق الآن."),
                             ("i_done", "طبّقته. يُحسب في «تم في 30 يومًا».")],
+            },
+            "books": {
+                "what": "مُستخرِج الإطار، وكيل kb للكتب. العنوان يصير أربعة أشياء: إطار الكتاب (مبادئه)، ومنصة خاصة "
+                        "به، وميزات للمنصات التي على بطاقاتك، وأغنية تحمل أفكاره.",
+                "how": "اكتب العناوين، عنوانًا في كل سطر، أو أرسل إلى صندوقك كتاب: ثم العنوان، فيسلّمه الموزّع إلى هنا. "
+                       "يعمل مما يعرفه النموذج عن الكتاب لا من مقاطعك في Audible، ويقول حين لا يعرف كتابًا. أسطره تذهب "
+                       "إلى «أفكارك» حيث تعلّم ما يبدو لك صحيحًا.",
+                "buttons": [("b_frame", "يضع العناوين على الرف ويستخرج إطار كل كتاب ينتظر، حتى خمسة في كل ضغطة، "
+                                        "بأفضل نموذج يُسمح لـ kb بسؤاله تحت سقفك اليومي.")],
             },
             "grow": {
                 "what": "قائمة مهام kb نفسه، مأخوذة من بطاقاتك: ما لم ينتهِ على بطاقة kb، والأجزاء والأفكار على البطاقات "

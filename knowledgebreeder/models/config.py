@@ -153,11 +153,14 @@ PRESETS: dict[str, dict[str, Any]] = {
                "key_page": "https://platform.openai.com/api-keys",
                "data": "OpenAI says API data is not used for training by default, and is kept up to 30 days."},
     "gemini": {"entry": {"protocol": "openai", "url": "https://generativelanguage.googleapis.com/v1beta/openai",
-                         "model": "gemini-4-argon", "key_env": "GEMINI_API_KEY", "budget": 60_000},
+                         "model": "gemini-4-argon", "key_env": "GEMINI_API_KEY", "budget": 60_000,
+                         "price_in": 4.0, "price_out": 20.0},
                "key_page": "https://aistudio.google.com/apikey",
+               # price: launched at $2/$10 for a short time; price lists in November 2026 give $4/$20 after that.
+               # kb counts the higher one, so the daily cap is never passed by surprise.
                "data": "Turn billing on for this key. On the free tier Google uses what you send to improve its "
-                       "products; on the paid tier it does not. kb could not confirm this model's price, so the run "
-                       "log shows no cost for it until you add price_in and price_out to the entry."},
+                       "products; on the paid tier it does not. kb counts it at $4 in and $20 out per million tokens, "
+                       "the price after its launch discount (price lists, November 2026)."},
     "kimi": {"entry": {"protocol": "openai", "url": "https://api.moonshot.ai/v1", "model": "kimi-k3.1-pro",
                        "key_env": "MOONSHOT_API_KEY", "budget": 60_000, "price_in": 4.0, "price_out": 20.0},
              "key_page": "https://platform.kimi.ai/console/api-keys",
