@@ -118,12 +118,15 @@ TEXT = {
             "grow": {
                 "what": "kb's own to-do list, taken from your cards: what is unfinished on kb's card, and the parts and "
                         "ideas on other cards that name kb.",
-                "how": "Answer each new line. The build list is what gets built next: copy it and paste it into your "
-                       "chat with Claude. Mark a line Done once kb has it. A line you answered stays answered when you "
-                       "add the cards again.",
+                "how": "Answer each new line. The build list is what gets built next: Send to Claude hands it to "
+                       "Claude on GitHub, which builds it and opens a pull request for you to merge. Mark a line Done "
+                       "once kb has it. A line you answered stays answered when you add the cards again.",
                 "buttons": [("g_build", "Puts the line on the build list."),
                             ("g_later", "Moves it out of the way. It waits under Not now."),
                             ("g_done", "Takes it off the build list once kb has it."),
+                            ("g_send", "Opens one public GitHub issue with the lines not sent before, asking Claude "
+                                       "to build them. Lines that name anything private stay on this laptop. Needs "
+                                       "kb keys add github once."),
                             ("g_copy", "Copies the build list as plain text, with the card each line came from.")],
             },
             "runs": {
@@ -233,11 +236,15 @@ TEXT = {
             "grow": {
                 "what": "قائمة مهام kb نفسه، مأخوذة من بطاقاتك: ما لم ينتهِ على بطاقة kb، والأجزاء والأفكار على البطاقات "
                         "الأخرى التي تذكر kb.",
-                "how": "أجب عن كل سطر جديد. قائمة البناء هي ما يُبنى بعد ذلك: انسخها والصقها في محادثتك مع Claude. علّم "
-                       "السطر «تم» حين يصبح في kb. السطر الذي أجبت عنه يبقى كما هو حين تضيف البطاقات مرة أخرى.",
+                "how": "أجب عن كل سطر جديد. قائمة البناء هي ما يُبنى بعد ذلك: «أرسلها إلى Claude» يسلّمها إلى Claude على "
+                       "GitHub فيبنيها ويفتح طلب دمج لتدمجه أنت. علّم السطر «تم» حين يصبح في kb. السطر الذي أجبت عنه "
+                       "يبقى كما هو حين تضيف البطاقات مرة أخرى.",
                 "buttons": [("g_build", "يضع السطر في قائمة البناء."),
                             ("g_later", "يبعده عن الطريق. ينتظر تحت «ليس الآن»."),
                             ("g_done", "يرفعه من قائمة البناء حين يصبح في kb."),
+                            ("g_send", "يفتح تذكرة علنية واحدة على GitHub بالأسطر التي لم تُرسل من قبل، ويطلب من "
+                                       "Claude أن يبنيها. الأسطر التي تذكر شيئًا خاصًا تبقى على هذا الحاسوب. يحتاج "
+                                       "kb keys add github مرة واحدة."),
                             ("g_copy", "ينسخ قائمة البناء نصًا عاديًا، مع البطاقة التي جاء منها كل سطر.")],
             },
             "runs": {

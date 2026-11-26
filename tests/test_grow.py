@@ -126,3 +126,67 @@ def test_the_page_lets_you_answer_each_line_and_copy_the_build_list(tmp_path):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_send_to_claude_opens_one_public_issue_without_anything_private(tmp_path):
+    from knowledgebreeder import keys
+    from knowledgebreeder.picture import handoff
+    w = tmp_path / "w"
+    w.mkdir()
+    _pic().save(w / "picture.json")
+    (w / "private.md").write_text("- Saturday baking class\n- scanned receipts\n")   # a card's name and a line's words
+    kb = serve.Kb(w / "runs.db", w / "lessons.md", 0, today=TODAY)
+    posts: list[tuple[str, str, dict]] = []
+
+    def fake(url, token, payload):
+        posts.append((url, token, payload))
+        return {"number": 7, "html_url": "https://github.com/TamerMomtaz/KnowledgeBreeder/issues/7"}
+    kb.handoff_post = fake
+    srv = serve.make(kb)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        items = grow.lines(_pic().cards)
+        for i in (0, 1, 4):               # kb's unfinished line, a private need, and a line from the private card
+            kb.grow_marks.set(items[i]["id"], "build", TODAY)
+        box = _boxes(ask(kb, "GET", "/")[2])["grow"]
+        assert 'id="g-send"' in box and "Send to Claude" in box and "public" in _text(box)
+        code, _, out = ask(kb, "POST", "/api/handoff", {"lang": "en"})
+        assert code == 400 and "kb keys add github" in json.loads(out)["error"] and not posts
+        keys.put(handoff.KEY, "github_pat_0123456789abcdef")
+        code, _, out = ask(kb, "POST", "/api/handoff", {"lang": "en"})
+        got = json.loads(out)
+        assert code == 200 and got["number"] == 7 and got["sent"] == 2 and got["held"] == 1
+        assert "issue #7" in got["say"] and "stayed here" in got["say"]
+        url, token, payload = posts[0]
+        assert url.endswith("/repos/TamerMomtaz/KnowledgeBreeder/issues") and token.startswith("github_pat_")
+        assert payload["body"].startswith("@claude please build") and payload["title"].startswith("kb build: ")
+        assert "the weekly order sheet" in payload["body"] and "let kb remind the class" in payload["body"]
+        assert "Saturday baking class" not in json.dumps(payload) and "receipts" not in json.dumps(payload)
+        assert "(from one of my cards)" in payload["body"]
+        assert "github_pat" not in json.dumps(payload)
+        code, _, out = ask(kb, "POST", "/api/handoff", {"lang": "en"})        # nothing new: nothing sent again
+        got = json.loads(out)
+        assert code == 200 and got["sent"] == 0 and got["held"] == 1 and "private" in got["say"] and len(posts) == 1
+        box = _boxes(ask(kb, "GET", "/")[2])["grow"]
+        assert box.count("sent to Claude, issue #7") == 2 and 'href="https://github.com/' in box
+        bubble = box.split('<div class="ex-body">', 1)[1].split("</details>", 1)[0]
+        told = {_text(x) for x in re.findall(r"<dt>(.*?)</dt>", bubble)}
+        assert {_text(x) for x in re.findall(r"<button[^>]*>(.*?)</button>", box.replace(bubble, ""))} <= told
+        ar = re.sub("[\u2068\u2069]", "", _boxes(ask(kb, "GET", "/?lang=ar")[2])["grow"])
+        assert "أرسلها إلى Claude" in ar
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_kb_keys_add_github_keeps_the_key_without_showing_it(tmp_path, monkeypatch, capsys):
+    import getpass
+
+    from knowledgebreeder import keys
+    from knowledgebreeder.cli import main
+    from knowledgebreeder.picture import handoff
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "github_pat_0123456789abcdef")
+    assert main(["keys", "add", "github", "--models-file", str(tmp_path / "models.json")]) == 0
+    out = capsys.readouterr().out
+    assert "Issues, Read and write" in out and "github_pat" not in out
+    assert keys.load()[handoff.KEY] == "github_pat_0123456789abcdef"
