@@ -159,10 +159,13 @@ PRESETS: dict[str, dict[str, Any]] = {
                        "products; on the paid tier it does not. kb could not confirm this model's price, so the run "
                        "log shows no cost for it until you add price_in and price_out to the entry."},
     "kimi": {"entry": {"protocol": "openai", "url": "https://api.moonshot.ai/v1", "model": "kimi-k3.1-pro",
-                       "key_env": "MOONSHOT_API_KEY", "budget": 60_000},
+                       "key_env": "MOONSHOT_API_KEY", "budget": 60_000, "price_in": 4.0, "price_out": 20.0},
              "key_page": "https://platform.kimi.ai/console/api-keys",
+             # price: Moonshot's own rate as a price list showed it on 2026-10-29 (pricepertoken.com); it doubled
+             # over the three months before, so check platform.kimi.ai before trusting it
              "data": "Moonshot says API data is not used to train its models. It does not say where the data is "
-                     "kept. Its docs do not list model names, so check that kimi-k3.1-pro is among them."},
+                     "kept. Its docs do not list model names, so check that kimi-k3.1-pro is among them. kb counts "
+                     "it at $4 in and $20 out per million tokens (a price list, 29 October 2026)."},
     "deepseek": {"entry": {"protocol": "openai", "url": "https://api.deepseek.com", "model": "deepseek-flash",
                            "key_env": "DEEPSEEK_API_KEY", "budget": 60_000, "price_in": 0.30, "price_out": 1.20},
                  "key_page": "https://platform.deepseek.com/api_keys",
@@ -174,6 +177,25 @@ PRESETS: dict[str, dict[str, Any]] = {
                "data": "Anthropic does not train on API data by default. API use is billed apart from a claude.ai "
                        "plan. It needs the Anthropic SDK: pip install -e \".[key]\"."},
 }
+
+
+def fill_price(path: str | Path, name: str) -> bool:
+    """Give an entry made from a preset before kb knew its price the preset's price. True when it changed."""
+    preset = (PRESETS.get(name) or {}).get("entry") or {}
+    if preset.get("price_in") is None or preset.get("price_out") is None:
+        return False
+    p = Path(path)
+    data = json.loads(p.read_text(encoding="utf-8"))
+    entry = (data.get("models") or {}).get(name)
+    if not isinstance(entry, dict) or entry.get("url") != preset.get("url"):
+        return False                                  # not this provider any more: leave it as you wrote it
+    if entry.get("price_in") is not None and entry.get("price_out") is not None:
+        return False
+    entry["price_in"], entry["price_out"] = preset["price_in"], preset["price_out"]
+    tmp = p.with_name(p.name + ".part")
+    tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, p)
+    return True
 
 
 def add_preset(path: str | Path, name: str, as_name: str | None = None, model: str | None = None,

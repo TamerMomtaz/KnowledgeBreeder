@@ -1386,6 +1386,14 @@ class Kb:
         self.ideas_dir = work / "ideas"
         self.ideas_book = ideas.Book(work / "ideas.json")
 
+    def start_links(self, opener=None) -> threading.Thread:
+        """From now on the inbox opens the links you send it; the links kept before are opened in the background."""
+        from . import links
+        self.inbox.opener = opener or links.fetch
+        t = threading.Thread(target=self.inbox.open_links, name="kb-links", daemon=True)
+        t.start()
+        return t
+
     def log(self) -> RunLog | None:
         return RunLog(self.runlog) if self.runlog.exists() else None
 

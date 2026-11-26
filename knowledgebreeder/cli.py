@@ -795,6 +795,7 @@ def _serve(a, dump) -> int:
         import webbrowser
         webbrowser.open(url)
     kb.start_nudges()          # phone reminders, if you turned them on in the page; nothing goes while they are off
+    kb.start_links()           # links you send are opened once; links kept before this are opened now, in the back
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -932,6 +933,10 @@ def _keys(a, dump) -> int:
             print(f"{keys.path()} keeps no {var}, so nothing changed.")
         return 0
     if book and name in book.models:
+        if config.fill_price(a.models_file, name):
+            book = models.load(a.models_file)
+            print(f"kb now knows {name}'s price: ${book.models[name].price_in:g} in and "
+                  f"${book.models[name].price_out:g} out per million tokens. It wrote that into {a.models_file}.")
         m = book.models[name]
     elif name in config.PRESETS:
         m, preset = config.add_preset(a.models_file, name)

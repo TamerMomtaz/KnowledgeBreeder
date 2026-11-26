@@ -618,7 +618,7 @@ kb inbox show in_3f2a9c0d1b7e              # one item, with the text kb read fro
 
 kb knows each file by its content, never by its name, and never opens or runs it. It reads what it can on the
 laptop, at once: text and posts as they are, the text layer of a PDF page by page, and the words of a .docx or
-.pptx file. A link is kept as text; kb never opens a link on its own. Screenshots, scanned PDFs and voice notes are
+.pptx file. A link (alone, or up to three inside a pasted post) is opened once by kb serve, the way a browser with scripts off would read it, and the page's title and words are kept beside it; the links you sent before are opened the next time kb serve starts. Only internet addresses are opened, never one on this laptop or your home network, up to 5 MB a page. A page behind a sign-in (LinkedIn, X and the like) shows only its wall: kb says so on the item, so paste the post's words or a screenshot instead. `kb inbox add` keeps a link as text only. Screenshots, scanned PDFs and voice notes are
 kept whole and marked as waiting for an image or speech reader that runs on the laptop; none is built in yet.
 Nothing is overwritten: the same file sent twice is kept once, and a second note on it goes beside the first.
 
