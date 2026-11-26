@@ -22,6 +22,7 @@ import base64
 import binascii
 import html
 import json
+import os
 import re
 import sys
 import threading
@@ -36,7 +37,7 @@ from urllib.parse import parse_qs, urlsplit
 from .. import explain, margins, theme
 from .. import where as wh
 from ..runlog import RunLog, query
-from . import actions, books, crew, engines, grow, icon, ideas, nudge, page, rating
+from . import actions, books, crew, engines, grow, handoff, icon, ideas, nudge, page, rating
 from . import inbox as inb
 from . import lessons as les
 from . import private as prv
@@ -166,6 +167,14 @@ LABELS = {
         "grow_no_build": "Nothing on the build list yet. Press Build this on a line below.",
         "g_build": "Build this", "g_later": "Not now", "g_done": "Done", "g_copy": "Copy the build list",
         "g_copied": "Copied. Paste it into your chat with Claude to have it built.",
+        "g_send": "Send to Claude", "g_sending": "Sending to Claude…",
+        "g_sent": "Sent: issue #{n} on GitHub. Claude builds it on a branch and opens a pull request for you to merge.",
+        "g_sent_held": " {h} line(s) naming something private stayed here.",
+        "g_sent_none": "Everything on the build list went to Claude already.",
+        "g_sent_private": "Nothing new may go: {h} line(s) name something private, so they stay here. Copy the list "
+                          "and hand those over yourself.",
+        "g_sent_line": "sent to Claude, issue #{n}",
+        "g_send_note": "The issue is public, like kb's code. Lines that name anything private stay on this laptop.",
         "g_copy_fail": "Could not copy. Select the text below and copy it.",
         "g_intro": "Build these into KnowledgeBreeder (kb). They come from my cards:", "g_from": "from",
         "g_k_unfinished": "unfinished on kb", "g_k_need": "kb needs", "g_k_decision": "open decision on kb",
@@ -335,6 +344,14 @@ LABELS = {
         "grow_no_build": "لا شيء في قائمة البناء بعد. اضغط «ابنِ هذا» على سطر أدناه.",
         "g_build": "ابنِ هذا", "g_later": "ليس الآن", "g_done": "تم", "g_copy": "انسخ قائمة البناء",
         "g_copied": "نُسخت. الصقها في محادثتك مع Claude ليبنيها.",
+        "g_send": "أرسلها إلى Claude", "g_sending": "يُرسلها إلى Claude…",
+        "g_sent": "أُرسلت: التذكرة رقم {n} على GitHub. يبنيها Claude في فرع ويفتح طلب دمج لتدمجه أنت.",
+        "g_sent_held": " بقي هنا {h} سطر يذكر شيئًا خاصًا.",
+        "g_sent_none": "كل ما في قائمة البناء أُرسل إلى Claude من قبل.",
+        "g_sent_private": "لا شيء جديد يمكن إرساله: {h} سطر يذكر شيئًا خاصًا فيبقى هنا. انسخ القائمة وسلّم هذه "
+                          "الأسطر بنفسك.",
+        "g_sent_line": "أُرسل إلى Claude، التذكرة رقم {n}",
+        "g_send_note": "التذكرة علنية مثل كود kb. الأسطر التي تذكر شيئًا خاصًا تبقى على هذا الحاسوب.",
         "g_copy_fail": "تعذّر النسخ. حدّد النص أدناه وانسخه.",
         "g_intro": "ابنِ هذه في KnowledgeBreeder (kb). هي من بطاقاتي:", "g_from": "من",
         "g_k_unfinished": "غير منتهٍ في kb", "g_k_need": "يحتاجه kb", "g_k_decision": "قرار مفتوح في kb",
@@ -705,6 +722,21 @@ document.addEventListener("click", function(e){
     .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.error || "?"); again("#ideas"); }); })
     .catch(function(err){ b.disabled = false; b.title = err.message; });
 });
+var gsend = document.getElementById("g-send");
+if (gsend){
+  gsend.addEventListener("click", function(){
+    var gs = document.getElementById("g-say");
+    gsend.disabled = true; gs.textContent = L.g_sending; gs.className = "soft";
+    fetch("/api/handoff", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
+                           body: JSON.stringify({lang: L.lang})})
+      .then(function(r){ return r.json().then(function(j){
+        if (!r.ok) throw new Error(j.error || "?");
+        gs.textContent = j.say; gs.className = "kept";
+        if (j.sent) setTimeout(function(){ again("#grow"); }, 6000);   // then each line shows its issue
+      }); })
+      .catch(function(err){ gsend.disabled = false; gs.textContent = err.message; gs.className = "err"; });
+  });
+}
 var gcopy = document.getElementById("g-copy");
 if (gcopy){
   gcopy.addEventListener("click", function(){
@@ -1148,7 +1180,8 @@ def nudge_box(lang: str, s: dict) -> str:
             f'<div class="row">{say}</div></section>')
 
 
-def grow_box(lang: str, groups: dict[str, list[dict]] | None, text: str = "", show: int = 5) -> str:
+def grow_box(lang: str, groups: dict[str, list[dict]] | None, text: str = "", show: int = 5,
+             sent: dict[str, dict] | None = None) -> str:
     """kb grows from your cards: the build list first, then the new lines to answer. Nothing without cards."""
     if groups is None:
         return ""
@@ -1160,6 +1193,10 @@ def grow_box(lang: str, groups: dict[str, list[dict]] | None, text: str = "", sh
     def li(x: dict, acts: tuple[str, ...]) -> str:
         kind = _t(lang, "g_k_" + x["kind"])
         why = f'<span class="why"><bdi>{_e(x["why"])}</bdi></span>' if x["why"] else ""
+        s = (sent or {}).get(x["id"])
+        if s:
+            why += (f'<span class="why"><a href="{_e(s["url"])}" target="_blank" rel="noopener">'
+                    f'{_e(_t(lang, "g_sent_line", n=s["issue"]))}</a></span>')
         btns = "".join(f'<button type="button" class="btn g-act" data-id="{x["id"]}" data-state="{st}">'
                        f'{_e(_t(lang, "g_" + st))}</button>' for st in acts)
         return (f'<li><span class="c"><bdi>{_e(x["card"])}</bdi> · {_e(kind)}</span><bdi>{_e(x["what"])}</bdi>{why}'
@@ -1168,8 +1205,10 @@ def grow_box(lang: str, groups: dict[str, list[dict]] | None, text: str = "", sh
     out = [head, f'<h3>{_e(_t(lang, "grow_build_h", n=len(groups["build"])))}</h3>']
     if groups["build"]:
         out.append(f'<ul class="g-list">{"".join(li(x, ("done", "later")) for x in groups["build"])}</ul>'
-                   f'<div class="row"><button type="button" class="act" id="g-copy">{_e(_t(lang, "g_copy"))}</button>'
+                   f'<div class="row"><button type="button" class="act" id="g-send">{_e(_t(lang, "g_send"))}</button>'
+                   f'<button type="button" class="act alt" id="g-copy">{_e(_t(lang, "g_copy"))}</button>'
                    f'<span id="g-say" role="status"></span></div>'
+                   f'<p class="soft small">{_e(_t(lang, "g_send_note"))}</p>'
                    f'<textarea id="g-text" class="g-text" readonly hidden rows="6" dir="auto" '
                    f'aria-label="{_e(_t(lang, "g_copy"))}">{_e(text)}</textarea>')
     else:
@@ -1445,7 +1484,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
-            "starting", "reading", "where_on", "shared", "share_again", "g_copied", "g_copy_fail")
+            "starting", "reading", "where_on", "shared", "share_again", "g_copied", "g_copy_fail", "g_sending")
     runs_box = f'<section class="box" id="runs"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
     lessons_box = (f'<section class="box" id="lessons"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -1511,6 +1550,8 @@ class Kb:
         self.nudge_post = nudge._post                           # tests put a stand-in here; nothing leaves then
         self.nudge_lock = threading.Lock()
         self.grow_marks = grow.Marks(work / "grow.json")
+        self.handoff = handoff.Sent(work / "handoff.json")
+        self.handoff_post = handoff._post                       # tests put a stand-in here; nothing leaves then
         self.ideas_dir = work / "ideas"
         self.ideas_book = ideas.Book(work / "ideas.json")
         self.shelf = books.Shelf(work / "books")
@@ -1616,7 +1657,28 @@ class Kb:
             traceback.print_exc()
             return ""
         groups = grow.sort(items, self.grow_marks.all())
-        return grow_box(lang, groups, grow.build_text(groups["build"], _t(lang, "g_intro"), _t(lang, "g_from")))
+        return grow_box(lang, groups, grow.build_text(groups["build"], _t(lang, "g_intro"), _t(lang, "g_from")),
+                        sent=self.handoff.all())
+
+    def send_build(self, lang: str = "en") -> dict:
+        """Hand the build list to Claude on GitHub: one public issue with the lines that may leave this laptop."""
+        from . import Picture
+        from .. import keys
+        if not self.picture.exists():
+            raise handoff.HandoffError("kb has no cards yet, so there is no build list")
+        pic = Picture.load(self.picture)
+        items = grow.sort(grow.lines(pic.cards), self.grow_marks.all())["build"]
+        guard = self.nudge_guard()
+        cards_out = {c.get("name") for c in pic.cards.values()
+                     if c.get("name") and not guard.holds(f"{c.get('name')} {c.get('one_line') or ''}")}
+        token = os.environ.get(handoff.KEY) or keys.load().get(handoff.KEY)
+        r = handoff.send(items, guard, cards_out, self.handoff, self.today or date.today(), token=token,
+                         post=self.handoff_post)
+        if not r["sent"]:
+            say = _t(lang, "g_sent_private", h=r["held"]) if r["held"] else _t(lang, "g_sent_none")
+        else:
+            say = _t(lang, "g_sent", n=r["number"]) + (_t(lang, "g_sent_held", h=r["held"]) if r["held"] else "")
+        return {**r, "say": say}
 
     def ideas_view(self) -> dict | None:
         """The ledger as the page shows it, or None while kb has neither cards nor an ideas file."""
@@ -1878,6 +1940,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": True})
             if path == "/api/books":
                 return self._books(body)
+            if path == "/api/handoff":
+                lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+                try:
+                    return self._json(200, {"ok": True, **self.kb.send_build(lang)})
+                except handoff.HandoffError as e:
+                    msg = str(e)
+                    return self._json(400, {"error": msg[0].upper() + msg[1:] + "."})
             if path == "/api/ideas":
                 self.kb.ideas_book.mark(str(body.get("id") or ""), str(body.get("state") or ""),
                                         self.kb.today or date.today())

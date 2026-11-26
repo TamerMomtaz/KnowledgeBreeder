@@ -42,6 +42,7 @@
     kb keys add gemini                          keep its key where the page can use it; nothing shows as you paste
     kb keys                                     which paid models the page asks, and what they cost today
     kb keys cap 2                               the page may spend up to $2 a day on paid models ($1 until you say)
+    kb keys add github                          let Send to Claude on the page open build issues on GitHub
     kb serve                                    your inbox and advice runs as pages on this machine, for your phone
     kb inbox                                    what you sent: posts, links, screenshots, PDFs, Word files, voice notes
     kb inbox add FILES --note "why I kept it"   put files from this laptop in the inbox too
@@ -909,7 +910,7 @@ def _keys(a, dump) -> int:
                 continue
             rows.append({"model": m.name, "variable": m.key_env, "key": keys.have(m.key_env) or "none",
                          "page_asks": m.name in c["paid"], "why_not": why.get(m.name)})
-        used = {m.key_env for m in book.models.values()}
+        used = {m.key_env for m in book.models.values()} | {"KB_GITHUB_TOKEN"}
         spare = [n for n in keys.names() if n not in used]
         if a.json:
             dump({"file": str(keys.path()), "models": rows, "unused_keys": spare, "spent_today": c["spent"],
@@ -931,12 +932,16 @@ def _keys(a, dump) -> int:
                   "kimi, deepseek or claude.")
         if spare:
             print(f"Kept, but no model uses them: {', '.join(spare)}.")
+        if "KB_GITHUB_TOKEN" in keys.names():
+            print("- github: key kept. Send to Claude on the page can open build issues.")
         print(f"Spent today on paid models: ${c['spent']:.2f} of your ${c['cap']:.2f} a day.")
         return 0
     if len(rest) != 1:
         held = ", ".join(book.models) if book else "no models file yet"
         raise KeyError(f"say which model: kb keys {a.action} followed by its name. Your models file holds: {held}.")
     name = rest[0]
+    if name.lower() == "github":
+        return _github_key(a.action)
     if a.action == "remove":
         var = book.models[name].key_env if name in book.models else name if name in keys.names() else None
         if not var:
@@ -986,6 +991,30 @@ def _keys(a, dump) -> int:
         print(f"The page now asks {m.name} beside your models on this laptop, up to ${book.cap:.2f} a day for all "
               f"paid models together. There is nothing to restart.")
     print(f"Check that it answers (this sends only a test question):\n  kb models check {m.name} --allow {m.name}")
+    return 0
+
+
+def _github_key(action: str) -> int:
+    """kb keys add github: the key Send to Claude uses to open an issue in kb's repository. Never shown."""
+    import getpass
+    from . import keys
+    from .picture import handoff
+    if action == "remove":
+        print(f"Removed {handoff.KEY}. Send to Claude stops." if keys.drop(handoff.KEY)
+              else "No GitHub key was kept, so nothing changed.")
+        return 0
+    print(f"Make a key at {handoff.KEY_PAGE}\n"
+          f"  Repository access: Only select repositories, then {handoff.repo().split('/')[-1]}\n"
+          f"  Permissions: Issues, Read and write (nothing else)\n"
+          f"Paste the key and press Enter. Nothing shows while you paste, on purpose.")
+    try:
+        value = getpass.getpass("Key: ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise KeyError("no key was pasted, so nothing was saved.") from None
+    f = keys.put(handoff.KEY, value)
+    print(f"Kept as {handoff.KEY} in {f}. Only you can read that file, and kb never prints the key.\n"
+          f"Send to Claude on the page now opens an issue in {handoff.repo()}. Nothing to restart.")
     return 0
 
 

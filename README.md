@@ -743,6 +743,28 @@ kb books frame --model kimi --allow kimi
 kb books show "Algorithms to Live By"
 ```
 
+#### kb builds itself: Send to Claude
+
+The kb grows from your cards box keeps kb's own build list. Send to Claude hands it to Claude on GitHub: kb opens one
+issue in this repository with the lines not sent before and a request to `@claude`, and the workflow
+`.github/workflows/claude.yml` answers it. Claude builds the lines on a branch and opens a pull request. Nothing
+reaches kb until you merge it. Each line then shows its issue, and a second press sends only what was added since.
+
+This repository is public, so the issue is public. A line that names anything on your private list, a card marked
+#private, a phone, an email, a key or money stays on the laptop, and a card's name goes along only when the card may
+leave. Only the repository's owner can start a build, so a stranger's issue spends nothing.
+
+Once, to set it up:
+
+1. On GitHub, install the Claude app on this repository: https://github.com/apps/claude
+2. In the repository's Settings, Secrets and variables, Actions, add the secret `ANTHROPIC_API_KEY` (a Claude API
+   key; builds are billed to it).
+3. On the laptop, keep a GitHub key that may open issues here (Issues: Read and write, this repository only):
+
+```
+kb keys add github
+```
+
 #### Your ideas
 
 One ledger of every idea, lesson, check and book principle kb has read, each with the file and line it came from.
