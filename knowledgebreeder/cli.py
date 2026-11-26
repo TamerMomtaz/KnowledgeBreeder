@@ -1052,7 +1052,8 @@ def _models(a, dump) -> int:
                 if m.protocol == "openai":
                     have = models.offered(m, a.allow)
                     row["runtime_offers"] = have
-                    if not ({m.model, f"{m.model}:latest", m.model.removesuffix(":latest")} & set(have)):
+                    names = {h.removeprefix("models/") for h in have}       # Gemini writes "models/gemini-4-argon"
+                    if not ({m.model, f"{m.model}:latest", m.model.removesuffix(":latest")} & names):
                         row["note"] = f"the runtime does not list '{m.model}'"
                 ans = models.ask(m, "You are a connection test.", "Reply with the single word: ready", allow=a.allow,
                                  sending="a connection test, nothing of yours")
@@ -1060,6 +1061,11 @@ def _models(a, dump) -> int:
             except models.ModelError as e:
                 bad += 1
                 row["result"] = f"failed: {e}"
+                if " 429" in str(e) and "quota" in str(e).lower():
+                    row["why"] = ("the key works, but its account has no quota left for this model. On Gemini that "
+                                  "usually means the free tier: set up billing on the key's project, then check again")
+                elif " 402" in str(e):
+                    row["why"] = "the key works, but its account has no money in it. Top it up, then check again"
             out.append(row)
         dump(out)
         return 1 if bad else 0

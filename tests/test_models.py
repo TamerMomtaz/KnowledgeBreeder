@@ -187,10 +187,12 @@ def test_command_line(tmp_path, capsys):
 
 def test_a_name_without_a_tag_matches_the_runtimes_latest(tmp_path, capsys):
     path = tmp_path / "models.json"
-    with StandIn(lambda m, s, u: "ready", models=("kb-qwen:latest", "qwen3.6:27b")) as sv:
+    with StandIn(lambda m, s, u: "ready", models=("kb-qwen:latest", "qwen3.6:27b", "models/gemini-4-argon")) as sv:
         path.write_text(json.dumps({"models": {"local": {"url": sv.url + "/v1", "model": "kb-qwen"},
+                                               "gem": {"url": sv.url + "/v1", "model": "gemini-4-argon"},
                                                "other": {"url": sv.url + "/v1", "model": "gone"}}}))
         assert main(["models", "--file", str(path), "check"]) == 0
         out = {r["name"]: r for r in json.loads(capsys.readouterr().out)}
     assert "note" not in out["local"] and out["local"]["result"] == "answered"
+    assert "note" not in out["gem"]                                    # Gemini's "models/" prefix is not a mismatch
     assert out["other"]["note"] == "the runtime does not list 'gone'"
