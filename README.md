@@ -743,6 +743,17 @@ kb books frame --model kimi --allow kimi
 kb books show "Algorithms to Live By"
 ```
 
+#### kb updates itself, and a menu bar instead of a long scroll
+
+The first page opens with a menu bar that names every box. Tap a name and the page shows just that box; **All** shows
+them all again. kb remembers the last box you opened.
+
+You no longer type `git pull`. `kb serve --install` also sets a nightly update (about 4 AM): it brings new kb code down
+from GitHub and restarts kb serve on it. When new code lands sooner, the page shows **Update kb**; press it and the page
+reloads on the new code. `kb update` does the same by hand. It only fast-forwards kb's own folder to GitHub's main: if
+you changed kb's files yourself or the folder is on another branch, it stops and says so. Your cards, `work/` and keys
+are never touched. After this pull request, run `kb serve --install` once to turn the nightly update on.
+
 #### kb builds itself: Send to Claude
 
 The kb grows from your cards box keeps kb's own build list. Send to Claude hands it to Claude on GitHub: kb opens one
