@@ -26,6 +26,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/scoreboard/` | Scores a graph against a checked gold file, keeps a ledger, and holds the promotion rule. Also a PID2Graph loader. | Scorer tested; PID2Graph loader not yet run on the real download |
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
 | `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run and one page per run that puts every model's advice in one list, served to your phone if you like. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run for real four times: three on a local model offline, once beside an outside model the person allowed |
+| `knowledgebreeder/process/` | Layer 2, work processes from plain speech: each person says their job in their own words, and kb joins the hand-offs into one process (steps, pipes, valves, instruments, decision tables, joins), drawn as a plant graph. Not tied to P&IDs. | First step. Tested on three invented notes; no real voice note yet |
 | `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. Ready entries for five providers. | Tested against a stand-in server only |
 | `knowledgebreeder/scout/` | The scout: reads pages you saved against your projects, keeps what the text itself shows, and keeps a ledger of everything it read and passed over. | Tested against a stand-in server only |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
@@ -115,6 +116,85 @@ like your P&ID. The whole plant is one drawing with no split by sheet, which get
 that crosses another is drawn straight over it. The what-if answers are connectivity only, as everywhere in the
 use layer. The file holds your plant, so treat it as private. It asks the network for nothing, and a content
 security policy inside it forbids it. Arabic covers the page's own words, not tags, kinds or the questions.
+
+## Work processes from plain speech
+
+A plant is equipment tied by pipes. A team is people tied by hand-offs. `kb process` reads each person's own
+description of their job, one file per person, and joins them into one process you can read, walk and test like a
+plant.
+
+```text
+person: Mona
+job: order desk
+
+I get the order from the customer.
+I check the order is complete.
+If the order is over 50 boxes, I send it to Karim for approval.
+Otherwise I send it to the kitchen.
+```
+
+Try it on the three invented notes:
+
+```bash
+kb process show tests/fixtures/process
+```
+
+```bash
+kb process show tests/fixtures/process --lang ar
+```
+
+```bash
+kb process graph tests/fixtures/process --out work/process/graph.json
+```
+
+```bash
+kb walk work/process/graph.json --out work/process/walk.html
+```
+
+```bash
+kb process whatif tests/fixtures/process --stop "the bank"
+```
+
+kb knows seven kinds of sentence, in English and in Arabic. Anything else is kept as a step, word for word.
+
+| Said | Becomes |
+|---|---|
+| I get THING from WHO · أستلم THING من WHO | a step that receives: one end of a pipe |
+| I send / pass / give THING to WHO · أرسل / أسلم THING إلى WHO | a step that hands on: the other end |
+| I wait for all of / any of / one of: A from X, B from Y · أنتظر كل من / أي من / واحد من | a join |
+| I check / measure / count WHAT · أتحقق من / أراجع / أقيس WHAT | an instrument on the step before it |
+| If CONDITION, ... · إذا CONDITION، ... | a valve, and a row in its decision table |
+| Otherwise ... · وإلا ... | the decision table's last row |
+| anything else | a step |
+
+A file may also say `job:` and `also:` (other names the person goes by, such as "the kitchen"), so "I send it to the
+kitchen" finds the person whose job that is. Someone named who has no file of their own is an outside party: a source
+if they give, a sink if they get.
+
+- **Hand-offs** are matched by the two names and the words of the thing. "It" or "them" matches whatever the other
+  side says. A hand-off both sides describe is drawn solid. One that only one side describes is drawn dashed and is a
+  question for the other person.
+- **Joins** say how a step's inputs combine. **All of**: it needs every one. **Any of**: one is enough. **One of**:
+  exactly one comes. A step with several inputs and no join word said is a question, and counted as all of until
+  someone answers.
+- **What if** (`kb process whatif --stop`): a person, a step (such as `"Sami 2"`) or an outside party stops, and kb
+  lists what stops with them, which checks are lost, who is left waiting, and which steps keep going because they
+  need any one of their inputs. `kb whatif` on the graph file counts connections only and does not know the join
+  types; `kb process whatif` does.
+- **Questions worth asking**: a hand-off one side does not mention, a join nobody stated, a decision with no
+  "otherwise", a thing that arrives and nobody says they check, and a wait that says nothing of where it comes from.
+
+The graph file is in the plant graph's own format: steps are equipment, hand-offs are pipe segments named by the
+thing, decisions are components of kind `decision`, checks are instruments, and the decision tables and questions
+ride along in the file. So `kb walk`, `kb stats` and `kb whatif` read it as they read a plant, with their plant words.
+
+Your team's notes are private: keep them and the graph in `work/`, which is never committed.
+
+Limits: this is pattern matching on words, not understanding. A sentence said another way ("Karim gets it next")
+is kept as a plain step and joins nothing, so read the hand-offs list. The three notes in the tests are invented;
+the process has not yet been tried on real voice notes, and kb has no speech reader yet, so a voice note must be
+typed out first. The walk page still uses the plant's own words. Arabic covers kb's words and the sentence kinds
+above, not every way of saying them.
 
 ## The run log
 
@@ -892,6 +972,7 @@ writer. `--json` gives the register and the findings as data.
 - The inbox reads text, links, PDFs with a text layer, and .docx and .pptx files. It does not yet read screenshots,
   scans or voice: those wait, kept whole, for a reader that runs on the laptop. It does not read .doc, .xls or
   .xlsx files, and a share from another app needs the page open (there is no share button into kb yet).
+- `kb process` reads typed words only. Voice notes wait for a speech reader that runs on the laptop.
 - No accuracy number is claimed for this repo yet. `breeding/scores.jsonl` will hold them as they are measured.
 
 ## Credits and licence
