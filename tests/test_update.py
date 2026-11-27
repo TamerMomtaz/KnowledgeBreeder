@@ -125,3 +125,31 @@ def test_update_restarts_kb_serve_through_systemd_when_it_runs_there(monkeypatch
     assert calls[0][:2] == ["systemd-run", "--user"] and calls[0][-3:] == ["--user", "restart", "kb-serve.service"]
     monkeypatch.delenv("INVOCATION_ID")
     assert update.restart_soon(fake_git()) is False
+
+
+def test_the_page_asks_for_new_code_each_time_it_opens_at_most_once_a_minute(tmp_path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    monkeypatch.setattr(update, "root", lambda: tmp_path)
+    w = tmp_path / "w"
+    w.mkdir()
+    kb = serve.Kb(w / "runs.db", w / "lessons.md", 0)
+    calls = []
+    kb.update_run = fake_git(behind=0, calls=calls)
+    srv = serve.make(kb)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        doc = ask(kb, "GET", "/")[2]
+        assert '{check: true}' in doc                        # the page asks on opening when no button shows
+        code, _, out = ask(kb, "POST", "/api/update", {"check": True})
+        assert code == 200 and json.loads(out)["behind"] == 0
+        fetches = sum(1 for c in calls if "fetch" in c)
+        kb.update_run = fake_git(behind=2, calls=calls)
+        ask(kb, "POST", "/api/update", {"check": True})      # asked again within the minute: GitHub is not asked
+        assert sum(1 for c in calls if "fetch" in c) == fetches
+        kb.update_checked -= 61
+        code, _, out = ask(kb, "POST", "/api/update", {"check": True})
+        assert json.loads(out)["behind"] == 2 and not any("merge" in c for c in calls)
+        assert 'id="up-go"' in ask(kb, "GET", "/")[2]
+    finally:
+        srv.shutdown()
+        srv.server_close()
