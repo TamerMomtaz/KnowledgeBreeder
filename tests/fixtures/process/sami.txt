@@ -1,0 +1,9 @@
+# Invented for kb's tests.
+person: Sami
+job: kitchen
+also: the baker
+
+I wait for all of: the order from Mona, the flour from the mill.
+I bake the bread.
+I count the boxes.
+I give the boxes to the driver.

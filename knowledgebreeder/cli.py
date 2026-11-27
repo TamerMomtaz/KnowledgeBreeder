@@ -52,6 +52,10 @@
     kb scout read work/sources                  read saved pages against your projects, look for chances
     kb scout log                                everything the scout read, with what it passed over and why
 
+    kb process show notes/                      each person's job in plain words, joined: hand-offs, joins, decisions, checks
+    kb process graph notes/ --out work/process/graph.json   the same process as a graph kb walk, stats and whatif read
+    kb process whatif notes/ --stop Karim       what stops when one person stops, by all of / any of / one of
+
 The graph argument is a graph.json, or the folder holding one.
 The run log is one SQLite file: --db PATH, or the KB_RUNLOG variable, or runs.db here.
 The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, or work/picture.json here.
@@ -270,6 +274,16 @@ def main(argv: list[str] | None = None) -> int:
     x = ss.add_parser("read"); asking(x); x.add_argument("paths", nargs="+", help="saved files, or folders of them")
     x.add_argument("--model"); x.add_argument("--again", action="store_true", help="ask again about sources read before")
     x = ss.add_parser("log"); x.add_argument("--today"); x.add_argument("--json", action="store_true")
+    pr = sub.add_parser("process", help="work processes from plain speech: each person's job, joined into one process")
+    ps2 = pr.add_subparsers(dest="process_cmd", required=True)
+    x = ps2.add_parser("show", help="who does what, the hand-offs, joins, decision tables, checks and open questions")
+    x.add_argument("notes", nargs="+", help="one file per person (.txt or .md), or folders of them")
+    x.add_argument("--lang", choices=["en", "ar"], default="en"); x.add_argument("--json", action="store_true")
+    x = ps2.add_parser("graph", help="write the process as a graph.json that kb walk, stats and whatif read")
+    x.add_argument("notes", nargs="+"); x.add_argument("--out", default="work/process/graph.json")
+    x.add_argument("--title", default="Work process")
+    x = ps2.add_parser("whatif", help="what stops when one person, step or outside party stops, by the join types")
+    x.add_argument("notes", nargs="+"); x.add_argument("--stop", required=True, help="a person, a step tag or an outside party")
     a = ap.parse_args(argv)
     if getattr(a, "allow", None):
         a.allow = [n.strip() for v in a.allow for n in v.split(",") if n.strip()]     # --allow a,b works too
@@ -312,6 +326,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.cmd == "log":
         return _log(a, dump)
+    if a.cmd == "process":
+        return _process(a, dump)
     if a.cmd == "where":
         from . import where
         data = where.gather(max(1, a.days), skip=[os.path.dirname(os.path.abspath(os.environ.get("KB_LESSONS", "work/lessons.md")))])
@@ -1294,6 +1310,28 @@ def _log(a, dump) -> int:
         return 2
     return 0
 
+def _process(a, dump) -> int:
+    from . import process
+    try:
+        pr = process.join(process.read_all(a.notes))
+        if a.process_cmd == "show":
+            if a.json:
+                dump(process.to_graph(pr))
+            else:
+                print(process.to_markdown(pr, a.lang))
+        elif a.process_cmd == "graph":
+            from pathlib import Path
+            out = Path(a.out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(process.to_graph(pr, a.title), indent=1, ensure_ascii=False), encoding="utf-8")
+            print(f"{out}: {len(pr.people)} people, {len(pr.pipes)} hand-offs, {len(pr.questions)} questions. "
+                  f"Walk it with: kb walk {out} --out work/process/walk.html. It is private: it holds what people said.")
+        else:
+            dump(process.whatif(pr, a.stop))
+    except (KeyError, FileNotFoundError) as e:
+        print(f"error: {e.args[0] if isinstance(e, KeyError) else e}", file=sys.stderr)
+        return 2
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

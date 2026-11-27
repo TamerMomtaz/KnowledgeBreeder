@@ -1,0 +1,8 @@
+# Invented for kb's tests: three people at a small bakery describe their jobs, as if typed from voice notes.
+person: Mona
+job: order desk
+
+I get the order from the customer.
+I check the order is complete.
+If the order is over 50 boxes, I send it to Karim for approval.
+Otherwise I send it to the kitchen.

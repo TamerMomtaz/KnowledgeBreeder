@@ -1,0 +1,9 @@
+# Invented for kb's tests.
+person: Karim
+job: manager
+also: the boss
+
+I get big orders from Mona.
+I check the price.
+If the customer has paid before, I pass the order to the kitchen.
+I wait for any of: the deposit from the customer, a letter of credit from the bank.
