@@ -922,7 +922,8 @@ them all again. kb remembers the last box you opened.
 
 You no longer type `git pull`. `kb serve --install` also sets a nightly update (about 4 AM): it brings new kb code down
 from GitHub and restarts kb serve on it. When new code lands sooner, the page shows **Update kb**; press it and the page
-reloads on the new code. `kb update` does the same by hand. It only fast-forwards kb's own folder to GitHub's main: if
+reloads on the new code. The page asks GitHub each time you open it (at most once a minute), so the button shows
+up as soon as a pull request is merged. `kb update` does the same by hand. It only fast-forwards kb's own folder to GitHub's main: if
 you changed kb's files yourself or the folder is on another branch, it stops and says so. Your cards, `work/` and keys
 are never touched. After this pull request, run `kb serve --install` once to turn the nightly update on.
 

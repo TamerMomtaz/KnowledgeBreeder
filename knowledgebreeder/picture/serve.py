@@ -759,6 +759,13 @@ if (gsend){
   });
 }
 var upgo = document.getElementById("up-go");
+if (!upgo){                                   // new code merged on GitHub? ask once on opening, then show the button
+  fetch("/api/update", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
+                        body: JSON.stringify({check: true})})
+    .then(function(r){ return r.ok ? r.json() : {}; })
+    .then(function(j){ if (j.behind > 0) location.reload(); })
+    .catch(function(){});
+}
 if (upgo){
   upgo.addEventListener("click", function(){
     var us = document.getElementById("up-say");
@@ -1652,6 +1659,7 @@ class Kb:
         self.update_state: dict | None = None                  # how far kb's code is behind GitHub; None: not checked
         self.update_run = upd._run                              # tests put a stand-in here; nothing runs git then
         self.update_lock = threading.Lock()
+        self.update_checked = 0.0                               # when kb last asked GitHub (time.monotonic)
         self.handoff_post = handoff._post                       # tests put a stand-in here; nothing leaves then
         self.ideas_dir = work / "ideas"
         self.ideas_book = ideas.Book(work / "ideas.json")
@@ -1851,8 +1859,12 @@ class Kb:
             now = now or datetime.now()
             return self.nudge.tick(now, self.soon(now.date()), waits, self.nudge_guard(), post=self.nudge_post)
 
-    def check_update(self) -> dict | None:
-        """Ask GitHub whether kb has new code. A failure (offline, not a git copy) leaves the page as it was."""
+    def check_update(self, fresh: float | None = None) -> dict | None:
+        """Ask GitHub whether kb has new code. A failure (offline, not a git copy) leaves the page as it was.
+        With fresh, an answer younger than that many seconds is kept, so opening the page often asks GitHub once."""
+        if fresh is not None and self.update_checked and time.monotonic() - self.update_checked < fresh:
+            return self.update_state
+        self.update_checked = time.monotonic()
         try:
             self.update_state = upd.state(run=self.update_run)
         except upd.UpdateError:
@@ -2081,6 +2093,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(400, {"error": msg[0].upper() + msg[1:] + "."})
             if path == "/api/update":
                 lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+                if body.get("check"):                 # the page asks each time it opens: is there new code?
+                    st = self.kb.check_update(fresh=60) or {}
+                    return self._json(200, {"ok": True, "behind": int(st.get("behind") or 0)})
                 try:
                     return self._json(200, {"ok": True, **self.kb.do_update(lang)})
                 except upd.UpdateError as e:
