@@ -27,6 +27,7 @@ It starts from P&IDs (piping and instrumentation diagrams) and is built so other
 | `knowledgebreeder/runlog/` | The run log: what every worker saw, said, cost and scored, in one SQLite file. Leaderboard and run-to-run comparison. Not tied to P&IDs. | Tested |
 | `knowledgebreeder/picture/` | The whole picture: one person's projects as one graph, read from cards. Overlaps, gaps, reuse, a brief, a town you can open offline, and advice written by a model, held to the cards and to the person's own lessons, with a rating per run and one page per run that puts every model's advice in one list, served to your phone if you like. Not tied to P&IDs. | Reports tested on invented cards. Advice tested against a stand-in server, and run for real four times: three on a local model offline, once beside an outside model the person allowed |
 | `knowledgebreeder/process/` | Layer 2, work processes from plain speech: each person says their job in their own words, and kb joins the hand-offs into one process (steps, pipes, valves, instruments, decision tables, joins), drawn as a plant graph. Not tied to P&IDs. | First step. Tested on three invented notes; no real voice note yet |
+| `knowledgebreeder/thoughts/` | Layer 3, understanding: your cards, framed books and inbox as one map of thoughts, joined by needs, causes, is part of and contradicts. Answers to your questions with their sources, the gaps, marriages of thoughts you approve, and a city you can open offline. Not tied to P&IDs. | First step. Tested on invented cards, one invented book and one invented post, against a stand-in server; no real model run yet |
 | `knowledgebreeder/models/` | The models kb may ask, and the gate. A model on your own machine is asked freely. Anything else needs your yes for that run. Ready entries for five providers. | Tested against a stand-in server only |
 | `knowledgebreeder/scout/` | The scout: reads pages you saved against your projects, keeps what the text itself shows, and keeps a ledger of everything it read and passed over. | Tested against a stand-in server only |
 | `breeding/` | The improvement loop: candidates, the growth prompt, the ledger. | No schedule set up yet |
@@ -195,6 +196,97 @@ is kept as a plain step and joins nothing, so read the hand-offs list. The three
 the process has not yet been tried on real voice notes, and kb has no speech reader yet, so a voice note must be
 typed out first. The walk page still uses the plant's own words. Arabic covers kb's words and the sentence kinds
 above, not every way of saying them.
+
+## Understanding: the city of thoughts
+
+The same idea again, pointed at what you know. A plant is equipment tied by pipes, and a team is people tied by
+hand-offs. What you know is thoughts tied by what they need, cause, belong to and contradict. `kb thoughts` keeps
+them in one private map, `work/thoughts.json`, and draws it as a city.
+
+**What goes in.** Your project cards, all of them as one subject ("My projects"). Every book the frame-outer has
+framed, each its own subject. Your inbox items: posts, links and PDFs. kb reads the cards and books by rules every
+time a `kb thoughts` command runs. A model reads the inbox items when you ask it to.
+
+```bash
+kb thoughts
+```
+
+```bash
+kb thoughts read --model local
+```
+
+```bash
+kb thoughts ask "How do I find a delivery driver?" --model local
+```
+
+```bash
+kb thoughts gaps
+```
+
+```bash
+kb thoughts marry --model local
+```
+
+```bash
+kb thoughts city --out work/thoughts/city.html --lang ar
+```
+
+- **A thought** is one idea in one sentence, kept with where it came from: the card and its heading, the book, or the
+  inbox item and the lines the model read it from.
+- **Its kind** is what it is in the city. **Infrastructure** is a principle other ideas stand on, drawn as a wide
+  hall. A **resource** is a fact or a thing that exists, drawn as a store with a dome. A **utility** is a method or a
+  tool you can use again, drawn as a tower with a mast. A **need** is something missing, drawn as an empty lot with a
+  sign, waiting for a thought that helps it. On a card, recurring themes and ideas are infrastructure, what it can do
+  and its reusable parts are utilities, what exists is a resource, and a need not yet met is a need. A book's
+  principles are infrastructure.
+- **Joins.** A model joins thoughts with one of four words: needs, causes, is part of, contradicts. Each join must
+  rest on lines of the item it read. And whenever a thought arrives, kb at once joins it, by the telling words they
+  share, to up to three thoughts from other sources: what you already have that **may help** it, or the need it may
+  help. A "may help" join is a word match, a hint to look, and the page says so.
+- **Reading the inbox** (`kb thoughts read`). kb numbers the item's lines and lists the thoughts on your map nearest
+  to it. The model writes the item's thoughts, each citing its lines, and joins them to each other or to yours. kb
+  then drops any thought that cites no line it sent, and any join of another kind, between thoughts it does not know,
+  or with no line under it. It marks a figure that appears in none of a thought's lines, and says how many it
+  dropped. An item is read once. `--again` reads it again.
+- **Asking** (`kb thoughts ask`). kb sends your question and the thoughts nearest it, with the thoughts joined to
+  them. The model answers in sentences, and each sentence must cite the thoughts it rests on. kb drops any sentence
+  that cites none, and shows each one with its sources: the card, the book or the inbox item. **Gaps** are what the
+  model says the map does not hold, marked as its words, and the words of your question that no thought holds. When
+  no thought is near the question, nothing is sent. `--no-model` lists the nearest thoughts and their sources, with
+  no model.
+- **Marriages.** Two joined thoughts from different subjects can marry into a new one. `kb thoughts marry` lists
+  the pairs. `--model NAME` asks a model to write the new thought for up to three pairs. A pair that makes nothing
+  new is kept as such and not asked again, and a figure in neither parent is marked. Nothing joins the map until you
+  say yes: `kb thoughts approve ID`, or `kb thoughts decline ID`, which is kept so the pair is never proposed again.
+  To write the new thought yourself, use `kb thoughts marry A B --as "the new thought"`. It needs no approval. An
+  approved thought stands in the district "Married thoughts" with a gold ring, names its two parents, and is joined
+  at once like any newcomer, so it can marry again.
+- **Gaps** (`kb thoughts gaps`): inbox items waiting for a model, screenshots and voice notes waiting for a reader on
+  this laptop, books not yet framed, thoughts that contradict each other, needs nothing on the map helps yet,
+  subjects with one source only, thoughts joined to nothing, and marriages waiting for your yes.
+- **The city** (`kb thoughts city`): one HTML file, drawn like `kb picture town`. Each subject is a district, and a
+  building is taller the more it is joined. Pick a building, or its name in the list under its district, to read the
+  thought, where it came from, the source's own words and what it is joined to. The thoughts it is joined to light
+  up. Find a thought by a word, or show one kind only. Marriages waiting for your yes are listed with the commands to
+  approve or decline them, each with a Copy button. The page saves nothing itself. Each control has a line saying
+  what it does. The page switches between English and Arabic, works by keyboard, and asks the network for nothing.
+
+What a model off this machine is sent follows the same rules as advice. It needs `--allow NAME` for that run. It
+never gets a line or a thought that holds a name on your private list, #private, a phone, an email, a key or money,
+or any thought from a card marked #private. A question that holds one of these is not sent at all. Every run goes
+into the run log with its cost (`thoughts-read`, `thoughts-ask`, `thoughts-marry`).
+
+Nothing is overwritten. When a line leaves a card, its thought is kept and marked with the day it left, and it
+leaves the city. A declined marriage is kept. The map is private: it stays in `work/`, which is never committed,
+and so does the city file.
+
+Limits: "may help" is word matching, not understanding. Two thoughts that say the same thing in different words are
+not joined, and two that share words by chance are. A model reads only the first part of a long item, as much as
+fits its budget, and the command says how many lines were left out. The thoughts a model writes are its reading:
+the check proves each one cites real lines, not that it reads them rightly. So read the source's words under each
+thought before you build on it. kb does not yet link a new inbox item the moment it arrives from the phone. It does
+so the next time a `kb thoughts` command runs. The page has no Ask box for the map yet. Arabic covers the page and
+kb's own words, not the thoughts, which keep the words they were written in.
 
 ## The run log
 
@@ -973,6 +1065,8 @@ writer. `--json` gives the register and the findings as data.
   scans or voice: those wait, kept whole, for a reader that runs on the laptop. It does not read .doc, .xls or
   .xlsx files, and a share from another app needs the page open (there is no share button into kb yet).
 - `kb process` reads typed words only. Voice notes wait for a speech reader that runs on the laptop.
+- `kb thoughts` joins thoughts by a model's reading and by shared words. It has not yet been run on a real inbox
+  with a real model, and its "may help" joins are hints, not findings.
 - No accuracy number is claimed for this repo yet. `breeding/scores.jsonl` will hold them as they are measured.
 
 ## Credits and licence

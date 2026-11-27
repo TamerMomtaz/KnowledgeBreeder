@@ -56,6 +56,14 @@
     kb process graph notes/ --out work/process/graph.json   the same process as a graph kb walk, stats and whatif read
     kb process whatif notes/ --stop Karim       what stops when one person stops, by all of / any of / one of
 
+    kb thoughts                                 the map of thoughts: your cards, books and inbox, joined
+    kb thoughts read                            a model reads your inbox items into thoughts, held to their lines
+    kb thoughts ask "what helps the class?"     an answer from your thoughts, each sentence with its sources, and the gaps
+    kb thoughts gaps                            what the map is missing: items waiting, needs nothing helps, contradictions
+    kb thoughts marry --model local             a model proposes new thoughts from two of yours; you approve each
+    kb thoughts approve m1a2b3c4                your yes: the new thought joins the map
+    kb thoughts city --out work/thoughts/city.html   the map as a city, one file, opens offline
+
 The graph argument is a graph.json, or the folder holding one.
 The run log is one SQLite file: --db PATH, or the KB_RUNLOG variable, or runs.db here.
 The picture is one private JSON file: --file PATH, or the KB_PICTURE variable, or work/picture.json here.
@@ -285,6 +293,32 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--title", default="Work process")
     x = ps2.add_parser("whatif", help="what stops when one person, step or outside party stops, by the join types")
     x.add_argument("notes", nargs="+"); x.add_argument("--stop", required=True, help="a person, a step tag or an outside party")
+    th = sub.add_parser("thoughts", help="layer 3: your cards, books and inbox as one map of thoughts, drawn as a city")
+    th.add_argument("action", nargs="?", default="show",
+                    choices=["show", "read", "ask", "gaps", "marry", "approve", "decline", "city"],
+                    help="show (the default), read inbox items with a model, ask a question, gaps, marry, approve or "
+                         "decline a marriage, or draw the city")
+    th.add_argument("rest", nargs="*", help="for ask, the question; for marry, two thought ids; for approve and "
+                                            "decline, the marriage id")
+    th.add_argument("--map", default=os.environ.get("KB_THOUGHTS", "work/thoughts.json"), help="the map of thoughts")
+    th.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
+    th.add_argument("--inbox", default=os.environ.get("KB_INBOX", "work/inbox"), help="the inbox folder")
+    th.add_argument("--books", default=os.environ.get("KB_BOOKS", "work/books"), help="the books folder")
+    th.add_argument("--model", help="which model reads, answers or marries, default the models file's default")
+    th.add_argument("--models-file", default=mfile); th.add_argument("--runlog", default=runlog)
+    th.add_argument("--no-log", action="store_true", help="do not record the run")
+    th.add_argument("--allow", action="append", default=[], metavar="NAME",
+                    help="let this run send to a model that is not on this machine")
+    th.add_argument("--private", default=pfile, metavar="PATH")
+    th.add_argument("--no-model", action="store_true", help="for ask: no model, only the nearest thoughts and sources")
+    th.add_argument("--as", dest="child", help='for marry: the new thought, in your words: --as "..."')
+    th.add_argument("--limit", type=int, default=10, help="for read: items read in one run")
+    th.add_argument("--pairs", type=int, default=3, help="for marry: pairs a model is asked about in one run")
+    th.add_argument("--again", action="store_true", help="for read: read items read before again")
+    th.add_argument("--all", action="store_true", help="for show: list every thought")
+    th.add_argument("--out", default="work/thoughts/city.html", help="for city: where the page goes")
+    th.add_argument("--title"); th.add_argument("--lang", choices=["en", "ar"], default="en")
+    th.add_argument("--today"); th.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
     if getattr(a, "allow", None):
         a.allow = [n.strip() for v in a.allow for n in v.split(",") if n.strip()]     # --allow a,b works too
@@ -348,11 +382,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd != "serve":                                     # kb serve reads the keys file again for every job
         from . import keys
         keys.fill()
-    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox", "keys", "books"):
+    if a.cmd in ("picture", "models", "scout", "serve", "agents", "inbox", "keys", "books", "thoughts"):
         from .models import ModelError, Refused
         try:
             return {"picture": _picture, "models": _models, "scout": _scout, "serve": _serve,
-                    "agents": _agents, "inbox": _inbox, "keys": _keys, "books": _books}[a.cmd](a, dump)
+                    "agents": _agents, "inbox": _inbox, "keys": _keys, "books": _books,
+                    "thoughts": _thoughts}[a.cmd](a, dump)
         except KeyError as e:
             print(f"error: {e.args[0]}", file=sys.stderr)
             return 2
@@ -1342,6 +1377,268 @@ def _process(a, dump) -> int:
         print(f"error: {e.args[0] if isinstance(e, KeyError) else e}", file=sys.stderr)
         return 2
     return 0
+
+
+def _thoughts(a, dump) -> int:
+    """kb thoughts: layer 3. Your cards, books and inbox as one map of thoughts; answers with sources; the city."""
+    from datetime import date
+
+    from . import models, thoughts
+    from .picture import Picture
+    from .picture.inbox import Inbox
+    from .picture.private import Private
+    from .thoughts import ask as tk_ask
+    from .thoughts import read as tk_read
+    from .thoughts import store as tk
+    today = date.fromisoformat(a.today) if a.today else date.today()
+    m = tk.Map(a.map)
+    pic = Picture.load(a.file) if os.path.exists(a.file) else None
+    inbox = Inbox(a.inbox) if os.path.isdir(a.inbox) else None
+    got = tk.gather(m, pic, a.books, inbox, today)              # what arrived since last time, linked at once
+    m.save()
+    arrived = (f"New on the map: {got['new']} thoughts, {got['links']} word links." if got["new"] else "")
+
+    def guard():
+        from .picture.advise import guard_for
+        g = Private.load(a.private)
+        return guard_for(pic, g) if pic else g
+
+    def logged(task: str, label: str, subject: str):
+        if a.no_log:
+            return None, None
+        from .runlog import RunLog
+        log = RunLog(a.runlog)
+        return log, log.start(task, label=label, subject=subject)
+
+    if a.action == "show":
+        s = tk.summary(m)
+        if a.json:
+            dump({**s, "thoughts_list": list(m.live().values())} if a.all else s)
+            return 0
+        if arrived:
+            print(arrived)
+        if not s["thoughts"]:
+            print("The map holds no thought yet. Add cards (kb picture add), frame a book (kb books frame) or send "
+                  "something to your inbox, then run kb thoughts again.")
+        else:
+            print(f"{s['thoughts']} thoughts in {len(s['subjects'])} subjects"
+                  + (f" ({s['left']} more have left their card and are kept)" if s["left"] else "") + ".")
+            for subj, n in s["subjects"].items():
+                print(f"- {subj}: {n}")
+            print("Kinds: " + ", ".join(f"{n} {r}" for r, n in s["roles"].items() if n) + ".")
+            print("Joins: " + (", ".join(f"{n} {k}" + (" (word match)" if k == tk.HINT else "")
+                                         for k, n in s["links"].items() if n) or "none yet") + ".")
+            if s["married"] or s["waiting"]:
+                print(f"Marriages: {s['married']} approved, {s['waiting']} waiting for your yes (kb thoughts marry).")
+            waits = len(tk_read.waiting(m))
+            if waits:
+                print(f"{waits} inbox items wait for a model to read them: kb thoughts read")
+        if a.all:
+            for t in sorted(m.live().values(), key=lambda t: (t["subject"].lower(), t["id"])):
+                print(f"  {t['id']}  [{t['subject']} · {t['role']}] {t['text']}")
+        return 0
+
+    if a.action == "gaps":
+        g = tk.gaps(m)
+        if a.json:
+            dump(g)
+            return 0
+        say = lambda t: f"{t['id']}  {t['text']}"
+        sections = (("Inbox items waiting for a model to read them (kb thoughts read)",
+                     [s.get("title") or s["id"] for s in g["waits_model"]]),
+                    ("Screenshots and voice notes waiting for a reader on this laptop",
+                     [f"{s.get('title')} ({s.get('why')})" for s in g["waits_reader"]]),
+                    ("Books on the shelf, not yet framed (kb books frame)", [s.get("title") for s in g["waits_frame"]]),
+                    ("Thoughts that contradict each other: which one holds?",
+                     [f"{m.thoughts[ln['a']]['text']}  <->  {m.thoughts[ln['b']]['text']}" for ln in g["contradictions"]]),
+                    ("Needs nothing on the map helps yet", [say(t) for t in g["needs_alone"]]),
+                    ("Subjects with only one source", g["thin"]),
+                    ("Thoughts joined to nothing", [say(t) for t in g["alone"]]),
+                    ("Marriages waiting for your yes (kb thoughts marry)", [f"{r['id']}  {r['child']}" for r in g["marriages"]]))
+        shown = False
+        for head, items in sections:
+            if items:
+                shown = True
+                print(f"## {head}")
+                print("\n".join(f"- {x}" for x in items) + "\n")
+        if not shown:
+            print("No gaps found. The map is small, or it is in good shape.")
+        return 0
+
+    if a.action in ("approve", "decline"):
+        if len(a.rest) != 1:
+            raise KeyError(f"say which marriage: kb thoughts {a.action} m1a2b3c4 (see them with: kb thoughts marry)")
+        if a.action == "approve":
+            tid = tk.approve(m, a.rest[0], today)
+            m.save()
+            print(f"Approved. The new thought {tid} stands in {tk.MARRIED_SUBJECT}: {m.thoughts[tid]['text']}")
+        else:
+            tk.decline(m, a.rest[0], today)
+            m.save()
+            print(f"Declined. {a.rest[0]} is kept as declined and will not be proposed again.")
+        return 0
+
+    if a.action == "city":
+        from .thoughts import city
+        path = city.write(m, a.out, today=today, lang=a.lang, title=a.title)
+        print(f"{path}: {len(m.live())} thoughts in {len(m.subjects())} districts. Open it in a browser. "
+              "It is private: it holds your thoughts.")
+        return 0
+
+    if a.action == "ask" and a.no_model:
+        r = tk_ask.find(m, " ".join(a.rest))
+        if a.json:
+            dump(r)
+            return 0
+        if not r["thoughts"]:
+            print("The map holds no thought near that question.")
+        for t in r["thoughts"]:
+            print(f"- {t['text']}\n  {t['id']} · {t['subject']} · from {t['source']}")
+        if r["missing_words"]:
+            print(f"\nWords of your question the map does not hold: {', '.join(r['missing_words'])}")
+        return 0
+
+    if a.action == "marry" and (a.rest or a.child):
+        if len(a.rest) != 2 or not a.child:
+            raise KeyError('marry two thoughts in your own words: kb thoughts marry T1 T2 --as "the new thought"')
+        tid = tk.marry_by_hand(m, a.rest[0], a.rest[1], a.child, today)
+        m.save()
+        print(f"Married. You wrote it, so it needs no approval: {tid} stands in {tk.MARRIED_SUBJECT}.")
+        return 0
+
+    if a.action == "marry" and not a.model:
+        waiting = tk.gaps(m)["marriages"]
+        pairs = tk.candidates(m, 10)
+        if a.json:
+            dump({"waiting": waiting, "pairs": pairs})
+            return 0
+        if waiting:
+            print("## Waiting for your yes")
+            for r in waiting:
+                print(f"- {r['id']}  {r['child']}\n    from: {m.thoughts[r['a']]['text']}\n    and:  "
+                      f"{m.thoughts[r['b']]['text']}" + (f"\n    why: {r['why']}" if r.get("why") else "")
+                      + "".join(f"\n    check: {n}" for n in r.get("notes", [])))
+            print("Approve with: kb thoughts approve ID. Decline with: kb thoughts decline ID.\n")
+        if pairs:
+            print("## Pairs that could marry")
+            for c in pairs:
+                print(f"- {c['a']} + {c['b']}  ({c['kind']}" + (f": {', '.join(c['shared'])}" if c["shared"] else "")
+                      + f")\n    {m.thoughts[c['a']]['text']}\n    {m.thoughts[c['b']]['text']}")
+            print('\nAsk a model to marry them: kb thoughts marry --model NAME. Or write the child yourself: '
+                  'kb thoughts marry A B --as "the new thought"')
+        if not waiting and not pairs:
+            print("No pair to marry yet: marriages come from thoughts in different subjects that are joined.")
+        return 0
+
+    # the rest asks a model: read, ask, marry --model
+    mdl = models.load(a.models_file).get(a.model)
+    g = guard()
+    if a.action == "read":
+        todo = tk_read.waiting(m, a.again)[: a.limit]
+        if todo and inbox is None:
+            raise KeyError(f"no inbox at {a.inbox}. Say where it is with --inbox PATH.")
+        if not todo:
+            print((arrived + "\n" if arrived else "") + "No inbox item waits to be read.")
+            return 0
+        chars = sum(min((s.get("chars") or mdl.budget), mdl.budget) for s in todo)
+        models.gate(mdl, a.allow, chars, tk_read.sending(len(todo)))
+        log, run = logged("thoughts-read", mdl.name, f"{len(todo)} inbox items")
+        try:
+            rows = tk_read.read_items(m, inbox, mdl, allow=a.allow, guard=g, today=today, again=a.again,
+                                      limit=a.limit, lang=a.lang, run=run)
+        finally:
+            m.save()
+            if run:
+                run.end()
+            if log:
+                log.close()
+        if a.json:
+            dump(rows)
+            return 0
+        for r in rows:
+            if r["status"] != "read":
+                print(f"- {r['title']}: not read. {r.get('error', '')}")
+                continue
+            k = r["kept"]
+            print(f"- {r['title']}: {k['thoughts']} thoughts in \"{r['subject']}\", {k['joins']} joins, "
+                  f"{k['hints']} word links." + (f" {len(r['dropped'])} of the model's pieces were dropped by the check."
+                                                  if r["dropped"] else "")
+                  + (f" {r['checks']} hold a figure in none of their lines: marked." if r["checks"] else "")
+                  + (f" {r['left_out']} lines did not fit and were not read." if r["left_out"] else "")
+                  + (f" {sum(r['held'].values())} private lines stayed on this machine." if r["held"] else ""))
+        left = len(tk_read.waiting(m))
+        if left:
+            print(f"{left} more wait. Run kb thoughts read again for the next {a.limit}.")
+        return 0
+
+    if a.action == "ask":
+        log, run = logged("thoughts-ask", mdl.name, "a question")
+        try:
+            r = tk_ask.ask(m, " ".join(a.rest), mdl, allow=a.allow, guard=g, lang=a.lang)
+            if run and r.get("asked"):
+                run.record("ask", worker=mdl.name, version=r.get("model"), subject="a question",
+                           tokens_in=r.get("tokens_in"), tokens_out=r.get("tokens_out"), cost=r.get("cost"),
+                           duration_ms=r.get("ms"), output={"sentences": len(r["answer"]), "dropped": len(r["dropped"])},
+                           scores={"traced": round(len(r["answer"]) / r["total"], 4) if r["total"] else 0.0})
+        finally:
+            if run:
+                run.end()
+            if log:
+                log.close()
+        if a.json:
+            dump(r)
+            return 0
+        if not r["asked"]:
+            print("The map holds no thought near that question, so no model was asked.")
+        else:
+            print(f"Answered by {r['worker']} ({r.get('model')}) from {r['thoughts_sent']} of your thoughts. "
+                  "Check each sentence against its sources.\n")
+            for i, x in enumerate(r["answer"], 1):
+                print(f"{i}. {x['says']}")
+                for src in x["sources"]:
+                    print(f"   From: {src}")
+                if x["figures_not_in_source"]:
+                    print(f"   Check: {', '.join(x['figures_not_in_source'])} is in none of its thoughts.")
+            if r["asked"] and not r["answer"]:
+                print("No sentence passed the check, so there is no answer to show.")
+            if r["dropped"]:
+                print(f"\nNot shown: {len(r['dropped'])} of {r['total']} sentences cited no thought that kb sent.")
+        gaps = r.get("missing", [])
+        if gaps or r["missing_words"]:
+            print("\n## Gaps")
+            for x in gaps:
+                print(f"- {x} (the model's words)")
+            if r["missing_words"]:
+                print(f"- Words of your question the map does not hold: {', '.join(r['missing_words'])}")
+        return 0
+
+    if a.action == "marry":
+        log, run = logged("thoughts-marry", mdl.name, f"up to {a.pairs} pairs")
+        try:
+            r = tk_ask.propose(m, mdl, allow=a.allow, guard=g, n=a.pairs, lang=a.lang, today=today)
+            if run and r["asked"]:
+                run.record("marry", worker=mdl.name, version=r.get("model"), subject=f"{a.pairs} pairs",
+                           tokens_in=r.get("tokens_in"), tokens_out=r.get("tokens_out"), cost=r.get("cost"),
+                           duration_ms=r.get("ms"), output={"proposed": len(r["proposed"]), "passed": r["passed"]})
+        finally:
+            m.save()
+            if run:
+                run.end()
+            if log:
+                log.close()
+        if a.json:
+            dump(r)
+            return 0
+        if not r["asked"]:
+            print("No pair to marry yet: marriages come from thoughts in different subjects that are joined.")
+            return 0
+        for x in r["proposed"]:
+            print(f"- {x['id']}  {x['child']}" + "".join(f"\n    check: {n}" for n in x.get("notes", [])))
+        print(f"{len(r['proposed'])} proposed, {r['passed']} pairs made nothing new. Nothing joins the map until you "
+              "approve it: kb thoughts approve ID")
+        return 0
+    return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
