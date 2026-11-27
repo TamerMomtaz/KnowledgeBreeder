@@ -22,6 +22,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 NAME = "kb-serve.service"
+UPDATE = "kb-update.service"
+UPDATE_TIMER = "kb-update.timer"
 Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
 
 
@@ -60,6 +62,38 @@ def unit_text(workdir: str | Path, cmd: list[str]) -> str:
         "WantedBy=default.target",
         "",
     ])
+
+
+def update_units(workdir: str | Path, python: str | None = None) -> dict[str, str]:
+    """The nightly update: a timer at about 4 AM runs kb update, which brings new kb code down from GitHub and
+    restarts kb serve on it. Persistent: a night the laptop slept is caught up at the next start."""
+    py = _quote(python or sys.executable)
+    return {
+        UPDATE: "\n".join([
+            "[Unit]",
+            "Description=kb update: bring new kb code down from GitHub and restart kb serve",
+            "After=network-online.target",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            f"WorkingDirectory={_quote(str(workdir))}",
+            f"ExecStart={py} -m knowledgebreeder.cli update",
+            "",
+        ]),
+        UPDATE_TIMER: "\n".join([
+            "[Unit]",
+            "Description=kb update, every night",
+            "",
+            "[Timer]",
+            "OnCalendar=*-*-* 04:00",
+            "RandomizedDelaySec=30min",
+            "Persistent=true",
+            "",
+            "[Install]",
+            "WantedBy=timers.target",
+            "",
+        ]),
+    }
 
 
 def port_free(port: int) -> bool:
@@ -145,11 +179,13 @@ def install(args: list[str], port: int, workdir: str | Path | None = None, run: 
     path = unit_dir() / NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     text = unit_text(workdir, command(args, python))
-    tmp = path.with_suffix(".part")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    for where, words in ((path, text), *((path.parent / n, t) for n, t in update_units(workdir, python).items())):
+        tmp = where.with_suffix(".part")
+        tmp.write_text(words, encoding="utf-8")
+        os.replace(tmp, where)
     _ok(run, ["systemctl", "--user", "daemon-reload"], "Reloading systemd")
     _ok(run, ["systemctl", "--user", "enable", NAME], "Turning on the start at login")
+    _ok(run, ["systemctl", "--user", "enable", "--now", UPDATE_TIMER], "Turning on the nightly update")
     _ok(run, ["systemctl", "--user", "restart", NAME], "Starting kb serve")
     state = "?"
     for _ in range(10):
@@ -163,6 +199,8 @@ def install(args: list[str], port: int, workdir: str | Path | None = None, run: 
     return [*said, "kb now starts by itself every time you log in to this laptop. It is running now.",
             f"Open it here: http://127.0.0.1:{port}/ (and on the phone, the same .ts.net address as before).",
             "You no longer need a terminal for kb serve.",
+            "kb also updates itself every night at about 4 AM, so you no longer need git pull. "
+            "The page shows Update kb when new code is ready sooner.",
             f"Its settings file: {path}",
             f"If the page ever does not open, see why with: journalctl --user -u {NAME} -n 30",
             "To stop it starting by itself: kb serve --uninstall"]
@@ -174,6 +212,9 @@ def uninstall(run: Runner | None = None) -> list[str]:
     if not path.exists():
         return ["kb serve was not set to start by itself, so there was nothing to undo."]
     run(["systemctl", "--user", "disable", "--now", NAME])
+    run(["systemctl", "--user", "disable", "--now", UPDATE_TIMER])
     path.unlink()
+    for n in (UPDATE, UPDATE_TIMER):
+        (path.parent / n).unlink(missing_ok=True)
     _ok(run, ["systemctl", "--user", "daemon-reload"], "Reloading systemd")
     return ["kb serve no longer starts by itself, and it has stopped. Start it by hand with: kb serve"]

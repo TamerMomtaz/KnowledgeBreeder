@@ -198,12 +198,18 @@ def test_kb_serve_starts_by_itself(tmp_path, monkeypatch, capsys):
     unit = (tmp_path / "cfg" / "systemd" / "user" / "kb-serve.service").read_text(encoding="utf-8")
     assert f'WorkingDirectory="{tmp_path / "my kb"}"' in unit and "WantedBy=default.target" in unit
     assert "ExecStart=/home/tee/KnowledgeBreeder/.venv/bin/python -m knowledgebreeder.cli serve --port 8765" in unit
-    assert calls[:3] == [["daemon-reload"], ["enable", "kb-serve.service"], ["restart", "kb-serve.service"]]
+    assert calls[:4] == [["daemon-reload"], ["enable", "kb-serve.service"], ["enable", "--now", "kb-update.timer"],
+                         ["restart", "kb-serve.service"]]
+    units = tmp_path / "cfg" / "systemd" / "user"
+    assert "-m knowledgebreeder.cli update" in (units / "kb-update.service").read_text(encoding="utf-8")
+    assert "OnCalendar=*-*-* 04:00" in (units / "kb-update.timer").read_text(encoding="utf-8")
+    assert any("no longer need git pull" in x for x in lines)
     assert lines[0].startswith("kb now starts by itself") and "kb serve --uninstall" in lines[-1]
     with pytest.raises(KeyError, match="without quotes"):
         autostart.unit_text(tmp_path, ["/a\"b/python"])
     assert autostart.uninstall(systemctl)[0].startswith("kb serve no longer starts by itself")
     assert not (tmp_path / "cfg" / "systemd" / "user" / "kb-serve.service").exists()
+    assert not (units / "kb-update.timer").exists() and not (units / "kb-update.service").exists()
     assert "nothing to undo" in autostart.uninstall(systemctl)[0]
 
     def down(cmd):

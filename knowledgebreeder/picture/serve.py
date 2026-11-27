@@ -35,6 +35,7 @@ from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 
 from .. import explain, margins, theme
+from .. import update as upd
 from .. import where as wh
 from ..runlog import RunLog, query
 from . import actions, books, crew, engines, grow, handoff, icon, ideas, nudge, page, rating
@@ -168,6 +169,11 @@ LABELS = {
         "g_build": "Build this", "g_later": "Not now", "g_done": "Done", "g_copy": "Copy the build list",
         "g_copied": "Copied. Paste it into your chat with Claude to have it built.",
         "g_send": "Send to Claude", "g_sending": "Sending to Claude…",
+        "nav_h": "kb's boxes", "nav_all": "All",
+        "up_new": "New kb code is ready: {n} change(s) from GitHub.", "up_btn": "Update kb",
+        "up_going": "Updating kb…", "up_done": "kb is updated and restarting. This page reloads by itself.",
+        "up_done_hand": "kb is updated. Stop kb serve in its terminal (Ctrl+C) and start it again.",
+        "up_none": "kb is already up to date.",
         "g_sent": "Sent: issue #{n} on GitHub. Claude builds it on a branch and opens a pull request for you to merge.",
         "g_sent_held": " {h} line(s) naming something private stayed here.",
         "g_sent_none": "Everything on the build list went to Claude already.",
@@ -345,6 +351,11 @@ LABELS = {
         "g_build": "ابنِ هذا", "g_later": "ليس الآن", "g_done": "تم", "g_copy": "انسخ قائمة البناء",
         "g_copied": "نُسخت. الصقها في محادثتك مع Claude ليبنيها.",
         "g_send": "أرسلها إلى Claude", "g_sending": "يُرسلها إلى Claude…",
+        "nav_h": "صناديق kb", "nav_all": "الكل",
+        "up_new": "كود جديد لـ kb جاهز: {n} تغيير من GitHub.", "up_btn": "حدّث kb",
+        "up_going": "يُحدّث kb…", "up_done": "حُدّث kb ويُعاد تشغيله. ستُحمّل هذه الصفحة من جديد وحدها.",
+        "up_done_hand": "حُدّث kb. أوقف kb serve في نافذته (Ctrl+C) ثم شغّله من جديد.",
+        "up_none": "kb محدّث بالفعل.",
         "g_sent": "أُرسلت: التذكرة رقم {n} على GitHub. يبنيها Claude في فرع ويفتح طلب دمج لتدمجه أنت.",
         "g_sent_held": " بقي هنا {h} سطر يذكر شيئًا خاصًا.",
         "g_sent_none": "كل ما في قائمة البناء أُرسل إلى Claude من قبل.",
@@ -487,6 +498,16 @@ p{margin:0 0 6px}
 .top{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
 .top a{color:var(--accent);white-space:nowrap}
 .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 22px}
+nav.boxes{position:sticky;top:0;z-index:20;display:flex;gap:8px;overflow-x:auto;padding:10px 2px;margin:0 0 18px;
+  background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+nav.boxes a{flex:none;display:inline-flex;align-items:center;min-height:40px;padding:6px 14px;border:2px solid var(--line);
+  border-radius:999px;color:inherit;text-decoration:none;white-space:nowrap;font-weight:600;font-size:.95rem}
+nav.boxes a:hover,nav.boxes a:focus-visible{border-color:var(--ink)}
+nav.boxes a.on{background:var(--seal,#b8282e);border-color:var(--seal,#b8282e);color:var(--seal-ink,#fff)}
+body.one .layout{display:block;max-width:900px;margin:0 auto}
+section.box[hidden]{display:none!important}
+section.box[id]{scroll-margin-top:84px}
+.box.update{border-color:var(--seal,#b8282e)}
 .runs{list-style:none;margin:0;padding:0}
 .runs li{border-top:1px solid var(--line)}
 .runs li:first-child{border-top:0}
@@ -736,6 +757,57 @@ if (gsend){
       }); })
       .catch(function(err){ gsend.disabled = false; gs.textContent = err.message; gs.className = "err"; });
   });
+}
+var upgo = document.getElementById("up-go");
+if (upgo){
+  upgo.addEventListener("click", function(){
+    var us = document.getElementById("up-say");
+    upgo.disabled = true; us.textContent = L.up_going; us.className = "soft";
+    fetch("/api/update", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
+                          body: JSON.stringify({lang: L.lang})})
+      .then(function(r){ return r.json().then(function(j){
+        if (!r.ok) throw new Error(j.error || "?");
+        us.textContent = j.say; us.className = "kept";
+        if (j.restart){                       // kb comes back in a few seconds: try until the page answers again
+          var tries = 0, back = function(){ fetch("/manifest.webmanifest", {cache: "no-store"})
+            .then(function(r){ if (r.ok) location.reload(); else throw 0; })
+            .catch(function(){ if (++tries < 30) setTimeout(back, 1000); }); };
+          setTimeout(back, 4000);
+        } else if (!j.updated) setTimeout(function(){ location.reload(); }, 2500);
+      }); })
+      .catch(function(err){ upgo.disabled = false; us.textContent = err.message; us.className = "err"; });
+  });
+}
+var bar = document.querySelector("nav.boxes");
+if (bar){
+  var shown = Array.prototype.slice.call(document.querySelectorAll(".layout section.box[id]")),
+      ids = shown.map(function(x){ return x.id; }), links = bar.querySelectorAll("a[data-box]");
+  var keep = function(id){ try { localStorage.setItem("kb-box", id); } catch (e) {} };
+  var kept = function(){ try { return localStorage.getItem("kb-box"); } catch (e) { return null; } };
+  var show = function(id, jump){
+    var one = ids.indexOf(id) >= 0;
+    document.body.classList.toggle("one", one);
+    shown.forEach(function(x){ x.hidden = one && x.id !== id; });
+    for (var i = 0; i < links.length; i++){
+      var on = links[i].getAttribute("data-box") === (one ? id : "all");
+      links[i].classList.toggle("on", on);
+      if (on){ links[i].setAttribute("aria-current", "true"); if (links[i].scrollIntoView) links[i].scrollIntoView({block: "nearest", inline: "center"}); }
+      else links[i].removeAttribute("aria-current");
+    }
+    if (jump) window.scrollTo(0, bar.offsetTop);
+    else if (one){                       // open at the top, menu in sight, after the browser's own jump to #box
+      var top = function(){ window.scrollTo(0, 0); };
+      setTimeout(top, 0); window.addEventListener("load", function(){ setTimeout(top, 0); });
+    }
+  };
+  var fromHash = function(jump){
+    var h = decodeURIComponent(location.hash.slice(1));
+    if (h === "all" || ids.indexOf(h) >= 0){ keep(h); show(h, jump); return; }
+    var k = kept();
+    show(k === "all" || ids.indexOf(k) >= 0 ? k : ids[0], false);
+  };
+  window.addEventListener("hashchange", function(){ fromHash(true); });
+  fromHash(false);
 }
 var gcopy = document.getElementById("g-copy");
 if (gcopy){
@@ -1454,11 +1526,36 @@ def manifest(lang: str) -> dict:
                                         "files": [{"name": "files", "accept": SHARE_ACCEPT}]}}}
 
 
+_NAV_BOX = re.compile(r'<section class="box[^"]*" id="([a-z]+)"[^>]*><h2>(.*?)</h2>', re.DOTALL)
+
+
+def nav(boxes: str, lang: str) -> str:
+    """A menu bar naming every box. The page shows one box at a time, so nothing needs a long scroll; All shows them
+    all again. Without scripts the names are plain links that jump to each box."""
+    links = []
+    for m in _NAV_BOX.finditer(boxes):
+        name = html.unescape(re.sub(r"<[^>]+>", "", m[2])).strip()
+        links.append(f'<a href="#{m[1]}" data-box="{m[1]}"><bdi>{_e(name)}</bdi></a>')
+    if len(links) < 2:
+        return ""
+    return (f'<nav class="boxes" aria-label="{_e(_t(lang, "nav_h"))}">'
+            f'<a href="#all" data-box="all">{_e(_t(lang, "nav_all"))}</a>{"".join(links)}</nav>')
+
+
+def update_strip(update: dict | None, lang: str) -> str:
+    """New kb code on GitHub: one line and the Update kb button. Nothing when kb is up to date or was not checked."""
+    if not update or not update.get("behind"):
+        return ""
+    return (f'<section class="box update" id="update"><p>{_e(_t(lang, "up_new", n=update["behind"]))}</p>'
+            f'<div class="row"><button type="button" class="act" id="up-go">{_e(_t(lang, "up_btn"))}</button>'
+            f'<span id="up-say" role="status"></span></div></section>')
+
+
 def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | None = None, limit: int = 60,
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
           ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None,
           nudges: str | None = None, grows: str | None = None, ideas_html: str | None = None,
-          books_html: str | None = None) -> str:
+          books_html: str | None = None, update: dict | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -1484,7 +1581,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     via = f'<p class="soft small">{_e(_t(lang, "via", who=who))}</p>' if who else ""
     hud = theme.hud(theme.standing(page.history(log, limit=1_000_000) if log else [], today), lang)
     keys = ("add", "saving", "not_saved", "send", "sending", "not_sent", "record", "stop", "remove", "too_big", "no_mic",
-            "starting", "reading", "where_on", "shared", "share_again", "g_copied", "g_copy_fail", "g_sending")
+            "starting", "reading", "where_on", "shared", "share_again", "g_copied", "g_copy_fail", "g_sending", "up_going")
     runs_box = f'<section class="box" id="runs"><h2>{_e(_t(lang, "runs_h"))}</h2>{runs_html}</section>'
     lessons_box = (f'<section class="box" id="lessons"><h2>{_e(_t(lang, "lessons_h"))} ({len(lessons)})</h2>'
                    f'<p class="soft small">{_e(_t(lang, "lessons_note"))}</p>{lesson_html}'
@@ -1511,6 +1608,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
             f'<header><div class="top"><h1>{_e(_t(lang, "title"))}</h1><a href="/?lang={LABELS[lang]["other_lang"]}" '
             f'lang="{LABELS[lang]["other_lang"]}">{_e(LABELS[lang]["other"])}</a></div>'
             f'<p class="soft">{_e(_t(lang, "sub"))}</p>{via}{explain.guide(lang)}{hud}</header>'
+            f'{update_strip(update, lang)}{nav(main + side, lang)}'
             f'<div class="layout"><div class="main">{main}</div><div class="side">{side}</div></div>'
             f'<footer><p>{_e(_t(lang, "private"))}</p></footer></div>'
             f'<script id="data" type="application/json">{blob}</script><script>{INDEX_JS}\n{explain.JS}</script></body></html>')
@@ -1551,6 +1649,9 @@ class Kb:
         self.nudge_lock = threading.Lock()
         self.grow_marks = grow.Marks(work / "grow.json")
         self.handoff = handoff.Sent(work / "handoff.json")
+        self.update_state: dict | None = None                  # how far kb's code is behind GitHub; None: not checked
+        self.update_run = upd._run                              # tests put a stand-in here; nothing runs git then
+        self.update_lock = threading.Lock()
         self.handoff_post = handoff._post                       # tests put a stand-in here; nothing leaves then
         self.ideas_dir = work / "ideas"
         self.ideas_book = ideas.Book(work / "ideas.json")
@@ -1750,6 +1851,37 @@ class Kb:
             now = now or datetime.now()
             return self.nudge.tick(now, self.soon(now.date()), waits, self.nudge_guard(), post=self.nudge_post)
 
+    def check_update(self) -> dict | None:
+        """Ask GitHub whether kb has new code. A failure (offline, not a git copy) leaves the page as it was."""
+        try:
+            self.update_state = upd.state(run=self.update_run)
+        except upd.UpdateError:
+            self.update_state = None
+        return self.update_state
+
+    def start_updates(self, every: float = 6 * 3600) -> threading.Thread:
+        """Check GitHub for new kb code now and every six hours, while kb serve runs."""
+        def loop():
+            while True:
+                try:
+                    self.check_update()
+                except Exception:                     # noqa: BLE001 - a check that fails must not stop the page
+                    traceback.print_exc()
+                time.sleep(every)
+        t = threading.Thread(target=loop, name="kb-update", daemon=True)
+        t.start()
+        return t
+
+    def do_update(self, lang: str = "en") -> dict:
+        """Update kb: bring the new code down, then restart kb serve on it when systemd runs it."""
+        with self.update_lock:
+            got = upd.apply(run=self.update_run)
+            self.update_state = {**(self.update_state or {}), "behind": 0}
+        if not got["updated"]:
+            return {"updated": 0, "restart": False, "say": _t(lang, "up_none")}
+        restart = upd.restart_soon(self.update_run)
+        return {**got, "restart": restart, "say": _t(lang, "up_done" if restart else "up_done_hand")}
+
     def start_nudges(self, every: float = 300) -> threading.Thread:
         """Check every five minutes, while kb serve runs, whether a reminder is due."""
         def loop():
@@ -1844,7 +1976,7 @@ class Handler(BaseHTTPRequestHandler):
                                  where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
                                  soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang),
                                  grows=self.kb.grow_html(lang), ideas_html=self.kb.ideas_html(lang),
-                                 books_html=self.kb.books_html(lang))
+                                 books_html=self.kb.books_html(lang), update=self.kb.update_state)
                 finally:
                     if log:
                         log.close()
@@ -1945,6 +2077,13 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self._json(200, {"ok": True, **self.kb.send_build(lang)})
                 except handoff.HandoffError as e:
+                    msg = str(e)
+                    return self._json(400, {"error": msg[0].upper() + msg[1:] + "."})
+            if path == "/api/update":
+                lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
+                try:
+                    return self._json(200, {"ok": True, **self.kb.do_update(lang)})
+                except upd.UpdateError as e:
                     msg = str(e)
                     return self._json(400, {"error": msg[0].upper() + msg[1:] + "."})
             if path == "/api/ideas":

@@ -252,6 +252,7 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--install", action="store_true",
                     help="start kb serve by itself at every login (a systemd user service), and now")
     sv.add_argument("--uninstall", action="store_true", help="stop kb serve starting by itself")
+    sub.add_parser("update", help="bring new kb code down from GitHub and restart kb serve (runs every night by itself)")
     ib = sub.add_parser("inbox", help="what you sent from the phone: posts, links, screenshots, files, voice notes")
     ib.add_argument("action", nargs="?", choices=["list", "add", "show"], default="list",
                     help="list (the default), add files from this laptop, or show one item")
@@ -319,6 +320,14 @@ def main(argv: list[str] | None = None) -> int:
             dump({**data, "items": where.find(data["items"], a.find) if a.find else data["items"]})
         else:
             print(where.md(data, a.find), end="")
+        return 0
+    if a.cmd == "update":
+        from . import update
+        try:
+            print("\n".join(update.by_hand()))
+        except update.UpdateError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
         return 0
     if a.cmd != "serve":                                     # kb serve reads the keys file again for every job
         from . import keys
@@ -812,6 +821,7 @@ def _serve(a, dump) -> int:
         webbrowser.open(url)
     kb.start_nudges()          # phone reminders, if you turned them on in the page; nothing goes while they are off
     kb.start_links()           # links you send are opened once; links kept before this are opened now, in the back
+    kb.start_updates()         # asks GitHub every six hours whether kb has new code; the page then shows Update kb
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
