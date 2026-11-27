@@ -190,3 +190,16 @@ def test_kb_keys_add_github_keeps_the_key_without_showing_it(tmp_path, monkeypat
     out = capsys.readouterr().out
     assert "Issues, Read and write" in out and "github_pat" not in out
     assert keys.load()[handoff.KEY] == "github_pat_0123456789abcdef"
+
+
+def test_kb_keys_add_github_refuses_a_claude_key(tmp_path, monkeypatch, capsys):
+    import getpass
+
+    from knowledgebreeder import keys
+    from knowledgebreeder.cli import main
+    from knowledgebreeder.picture import handoff
+    monkeypatch.setattr(getpass, "getpass", lambda prompt="": "sk-ant-api03-0123456789abcdef")
+    assert main(["keys", "add", "github", "--models-file", str(tmp_path / "models.json")]) != 0
+    err = capsys.readouterr().err
+    assert "Claude key" in err and "ANTHROPIC_API_KEY" in err and "sk-ant" not in err
+    assert handoff.KEY not in keys.load()

@@ -1012,6 +1012,12 @@ def _github_key(action: str) -> int:
     except (EOFError, KeyboardInterrupt):
         print()
         raise KeyError("no key was pasted, so nothing was saved.") from None
+    v = value.strip()
+    if not v.startswith(("github_pat_", "ghp_")):
+        hint = (" That looks like a Claude key: it belongs in the repository's ANTHROPIC_API_KEY secret, not here."
+                if v.startswith("sk-ant-") else "")
+        raise KeyError(f"that is not a GitHub key: a GitHub key starts with github_pat_.{hint} Make one at "
+                       f"{handoff.KEY_PAGE}. Nothing was saved.")
     f = keys.put(handoff.KEY, value)
     print(f"Kept as {handoff.KEY} in {f}. Only you can read that file, and kb never prints the key.\n"
           f"Send to Claude on the page now opens an issue in {handoff.repo()}. Nothing to restart.")
