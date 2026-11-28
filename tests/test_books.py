@@ -195,6 +195,7 @@ def test_the_page_sends_the_picked_models_and_frames_a_book_again(tmp_path):
     try:
         box = _boxes(ask(kb, "GET", "/")[2])["books"]
         assert 'id="book-m1"' in box and '<option value="local">' in box
+        assert 'data-tpl="It frames with {who}."' in box      # the page fills in the models you pick
         code, _, out = ask(kb, "POST", "/api/books", {"titles": "The Bread Book", "lang": "en",
                                                       "models": ["kimi", "local"], "judge": "claude"})
         assert code == 200

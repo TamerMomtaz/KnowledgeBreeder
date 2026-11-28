@@ -715,13 +715,22 @@ if (bgo){
       .then(function(j){ bshow(j); btitles.value = ""; if (j.status === "running") bpoll(); else again("#books"); })
       .catch(function(e){ bshow({say: e.message, cls: "err"}); bgo.disabled = false; });
   });
+  var bwho = function(){          // the line names who will frame: "a", "a + b" or "a + b → c", as the shelf does
+    var tpl = bsay.getAttribute("data-tpl"); if (!tpl || bgo.disabled) return;
+    var v = function(i){ var e = document.getElementById(i); return e ? e.value : ""; };
+    var ns = [v("book-m1"), v("book-m2")].filter(function(x, k, a){ return x && a.indexOf(x) === k; }), j = v("book-judge");
+    if (!ns.length) return;
+    var w = ns.join(" + ") + (j && ns.length > 1 ? " \u2192 " + j : "");
+    bsay.textContent = tpl.replace("{who}", L.lang === "ar" ? "\u2068" + w + "\u2069" : w); bsay.className = "soft small";
+  };
   if (bbox.getAttribute("data-running") === "1"){ bgo.disabled = true; bpoll(); }
   ["book-m1", "book-m2", "book-judge"].forEach(function(i){     // the page remembers who you picked last time
     var e = document.getElementById(i); if (!e) return;
     try { var v = localStorage.getItem("kb-" + i); if (v !== null && Array.prototype.some.call(e.options,
       function(o){ return o.value === v; })) e.value = v; } catch (x) {}
-    e.addEventListener("change", function(){ try { localStorage.setItem("kb-" + i, e.value); } catch (x) {} });
+    e.addEventListener("change", function(){ try { localStorage.setItem("kb-" + i, e.value); } catch (x) {} bwho(); });
   });
+  bwho();
 }
 
 function again(part){             // load the page again at a box; a change of the #part alone would not reload it
@@ -1414,13 +1423,15 @@ def books_box(lang: str, shelf: books.Shelf, who: list[str], problem: str | None
     """Your books: titles in, who frames them, and each framed book's framework, platform, features and song, folded."""
     rows = shelf.items()
     say = (_t(lang, "books_who", who=", ".join(who)) if who else _t(lang, "books_no_model", e=problem or "?"))
+    # with pickers, the page fills {who} from them, so the line names the models you picked, not the default
+    tpl = f' data-tpl="{_e(_t(lang, "books_who"))}"' if who and len(offer or []) > 1 else ""
     out = [f'<section class="box books" id="books" data-running="{1 if running else 0}"><h2>{_e(_t(lang, "books_h"))}'
            f'{f" ({len(rows)})" if rows else ""}</h2><p class="soft small">{_e(_t(lang, "books_note"))}</p>'
            f'<textarea id="book-titles" dir="auto" rows="3" placeholder="{_e(_t(lang, "books_ph"))}" '
            f'aria-label="{_e(_t(lang, "books_ph"))}"></textarea>'
            + book_picks(lang, offer or [], who[0] if who else None) +
            f'<div class="row"><button type="button" id="book-go"{"" if who else " disabled"}>{_e(_t(lang, "b_frame"))}</button>'
-           f'<span id="book-say" role="status" class="soft small">{_e(say)}</span></div>']
+           f'<span id="book-say" role="status" class="soft small"{tpl}>{_e(say)}</span></div>']
     if not rows:
         return "".join(out) + f'<p class="soft">{_e(_t(lang, "books_none"))}</p></section>'
     items = []
