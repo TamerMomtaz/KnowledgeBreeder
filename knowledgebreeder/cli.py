@@ -873,6 +873,7 @@ def _serve(a, dump) -> int:
     kb.start_nudges()          # phone reminders, if you turned them on in the page; nothing goes while they are off
     kb.start_links()           # links you send are opened once; links kept before this are opened now, in the back
     kb.start_updates()         # asks GitHub every six hours whether kb has new code; the page then shows Update kb
+    kb.start_map_reader()      # reads what lands in the inbox into your map of thoughts, with the model on this laptop
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
