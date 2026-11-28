@@ -144,3 +144,70 @@ def test_kb_books_add_and_frame_from_the_terminal(tmp_path, monkeypatch, capsys)
     assert main(["books", "show", "The Bread Book", *common]) == 0
     assert "RiseClock" in capsys.readouterr().out
     assert (w / "ideas").is_dir() and any((w / "ideas").glob("book-*.md"))
+
+
+def test_two_models_read_a_book_and_a_third_brings_them_together(tmp_path, monkeypatch):
+    shelf = books.Shelf(tmp_path / "books")
+    shelf.add(["The Bread Book"], TODAY)
+    other = {**REPLY, "framework": [REPLY["framework"][0], {"name": "Bake by feel", "says": "Hands learn the dough.",
+                                                           "use": "Let each baker keep notes by touch."}]}
+    merged = {**REPLY, "agree": ["Both put resting the dough first."],
+              "differ": ["One says weigh, the other bake by feel: kept weigh, it is the book's own rule."]}
+    asked = []
+
+    def fake(m, system, user, allow=(), sending=""):
+        asked.append((m.name, "judge" in system, list(allow)))
+        reply = merged if "judge" in system else (REPLY if m.name == "kimi" else other)
+        return reply, models.Answer(text="{}", worker=m.name, model=m.model, host="x", where="outside", ms=5,
+                                    tokens_in=1000, tokens_out=500, cost=0.01, chars_sent=len(user))
+    monkeypatch.setattr(books.models, "ask_json", fake)
+    kimi = config.Model("kimi", "openai", "https://api.moonshot.ai/v1", "kimi-k3.1-pro", key_env="MOONSHOT_API_KEY")
+    gpt = config.Model("openai", "openai", "https://api.openai.com/v1", "gpt-6.2-sol", key_env="OPENAI_API_KEY")
+    claude = config.Model("claude", "anthropic", "https://api.anthropic.com", "claude-sonnet-5-5",
+                          key_env="ANTHROPIC_API_KEY")
+    r = books.frame_waiting(shelf, tmp_path / "ideas", _pic().cards, kimi, Private(), TODAY,
+                            allow=["kimi", "openai", "claude"], also=[gpt], judge=claude)
+    assert [(a[0], a[1]) for a in asked] == [("kimi", False), ("openai", False), ("claude", True)]
+    b = r["books"][0]
+    assert b["status"] == "framed" and b["by"] == "kimi + openai → claude" and b["cost"] == 0.03
+    f = shelf.frame("the-bread-book")
+    assert set(f["readings"]) == {"kimi", "openai"} and f["differ"] and f["worker"] == "kimi + openai → claude"
+    page = (tmp_path / "books" / "the-bread-book.md").read_text()
+    assert "## How the readings compare" in page and "They differ: One says weigh" in page
+    box = serve.books_box("en", shelf, ["kimi"], None, False, offer=["kimi", "openai", "claude"])
+    assert 'id="book-m2"' in box and 'id="book-judge"' in box
+    assert "How the readings compare" in _text(box) and "openai's own reading" in _text(box)
+    assert "kimi + openai → claude" in _text(box)
+
+
+def test_the_page_sends_the_picked_models_and_frames_a_book_again(tmp_path):
+    seen: list[list[str]] = []
+    result = {"books": [{"title": "The Bread Book", "status": "framed", "known": True, "ideas": 5}], "left": 0}
+
+    def runner(argv):
+        seen.append([str(x) for x in argv])
+        return 0, json.dumps(result), ""
+    kb, w = _kb(tmp_path, runner)
+    real = kb.chosen
+    kb.chosen = lambda: {**real(), "paid": ["kimi", "openai", "claude"], "here": ["local"]}
+    srv = serve.make(kb)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        box = _boxes(ask(kb, "GET", "/")[2])["books"]
+        assert 'id="book-m1"' in box and '<option value="local">' in box
+        code, _, out = ask(kb, "POST", "/api/books", {"titles": "The Bread Book", "lang": "en",
+                                                      "models": ["kimi", "local"], "judge": "claude"})
+        assert code == 200
+        kb.jobs.wait()
+        argv = seen[-1]
+        assert argv[argv.index("--model") + 1] == "kimi" and argv[argv.index("--also") + 1] == "local"
+        assert argv[argv.index("--judge") + 1] == "claude" and argv[argv.index("--allow") + 1] == "kimi,claude"
+        kb.shelf.set("the-bread-book", status="framed")
+        code, _, out = ask(kb, "POST", "/api/books", {"titles": "The Bread Book", "lang": "en", "models": ["openai"]})
+        assert code == 200 and kb.jobs.wait() and "--also" not in seen[-1]      # framed before: framed again
+        assert seen[-1][seen[-1].index("--model") + 1] == "openai"
+        code, _, out = ask(kb, "POST", "/api/books", {"titles": "X", "models": ["gemini"], "lang": "en"})
+        assert code == 400 and "gemini" in json.loads(out)["say"] and "x" not in kb.shelf.read()
+    finally:
+        srv.shutdown()
+        srv.server_close()

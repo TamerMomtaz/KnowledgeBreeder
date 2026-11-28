@@ -211,6 +211,11 @@ LABELS = {
                       "platform of its own, features for the platforms on your cards, and a song to remember it by. "
                       "It works from what the model knows of the book, not your clips; tick what rings true in Your ideas.",
         "books_ph": "Book titles, one a line", "b_frame": "Frame them out",
+        "bk_with": "Frame with", "bk_and": "and", "bk_judge": "then bring both together with", "bk_none": "no one",
+        "bk_pick_note": "One model is the cheapest. Each model you add costs about one more book. A title you framed "
+                        "before is framed again with the models you pick.",
+        "bk_compare": "How the readings compare", "bk_agree": "Both say", "bk_differ": "They differ",
+        "bk_reading": "{who}'s own reading", "bk_bad_pick": "Pick models from the list: {e}",
         "books_who": "It frames with {who}.", "books_no_model": "No model can be asked now: {e}",
         "books_none": "No books yet. Write a title above, or send book: and the title to your inbox.",
         "books_added": "On the shelf: {n} new.", "books_no_titles": "Write at least one title first.",
@@ -400,6 +405,11 @@ LABELS = {
                       "للمنصات التي على بطاقاتك، وأغنية تتذكره بها. يعمل مما يعرفه النموذج عن الكتاب لا من مقاطعك؛ "
                       "علّم ما يبدو لك صحيحًا في «أفكارك».",
         "books_ph": "عناوين الكتب، عنوان في كل سطر", "b_frame": "استخرج أطرها",
+        "bk_with": "استخرج بـ", "bk_and": "و", "bk_judge": "ثم اجمع القراءتين بـ", "bk_none": "لا أحد",
+        "bk_pick_note": "نموذج واحد هو الأرخص. كل نموذج تضيفه يكلّف تقريبًا كتابًا آخر. العنوان الذي استُخرج من قبل "
+                        "يُستخرج من جديد بالنماذج التي تختارها.",
+        "bk_compare": "كيف تقارن القراءتان", "bk_agree": "تتفقان على", "bk_differ": "تختلفان في",
+        "bk_reading": "قراءة {who} وحده", "bk_bad_pick": "اختر النماذج من القائمة: {e}",
         "books_who": "يعمل بـ {who}.", "books_no_model": "لا يمكن سؤال أي نموذج الآن: {e}",
         "books_none": "لا كتب بعد. اكتب عنوانًا في الأعلى، أو أرسل إلى صندوقك كتاب: ثم العنوان.",
         "books_added": "على الرف: {n} جديد.", "books_no_titles": "اكتب عنوانًا واحدًا على الأقل أولًا.",
@@ -545,7 +555,7 @@ button:disabled{opacity:.6;cursor:default}
 .pending li{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px dashed var(--line);padding:4px 0}
 .pending span{overflow-wrap:anywhere}
 .pending .btn{min-height:40px;min-width:44px;padding:0 12px;font-size:1.1rem}
-.books textarea{min-height:4.5em}.book-list details>summary{cursor:pointer;list-style:none}.book-list h4{margin:10px 0 4px}.song{white-space:pre-wrap;font:inherit;background:var(--card);border-inline-start:3px solid var(--line);padding:8px 10px;margin:4px 0}
+.books textarea{min-height:4.5em}.book-picks{flex-wrap:wrap;gap:8px 14px}.book-picks label{display:inline-flex;gap:6px;align-items:center}.book-picks select{font:inherit;padding:6px 8px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:3px}.book-list details>summary{cursor:pointer;list-style:none}.book-list h4{margin:10px 0 4px}.song{white-space:pre-wrap;font:inherit;background:var(--card);border-inline-start:3px solid var(--line);padding:8px 10px;margin:4px 0}
 .inbox{list-style:none;margin:14px 0 0;padding:0}
 .inbox li{display:grid;grid-template-columns:4.6em minmax(0,1fr);column-gap:10px;row-gap:2px;border-top:1px solid var(--line);padding:10px 2px}
 .kind{grid-row:1/span 4;font-weight:700}
@@ -697,13 +707,21 @@ if (bgo){
   };
   bgo.addEventListener("click", function(){
     bgo.disabled = true; bshow({say: L.starting});
+    var pick = function(i){ var e = document.getElementById(i); return e ? e.value : ""; };
+    var ms = [pick("book-m1"), pick("book-m2")].filter(function(x){ return x; });
     fetch("/api/books", {method: "POST", headers: {"Content-Type": "application/json", "X-KB": "1"},
-                         body: JSON.stringify({titles: btitles.value, lang: L.lang})})
+                         body: JSON.stringify({titles: btitles.value, lang: L.lang, models: ms, judge: pick("book-judge")})})
       .then(function(r){ return r.json().then(function(j){ if (!r.ok) throw new Error(j.say || j.error || String(r.status)); return j; }); })
       .then(function(j){ bshow(j); btitles.value = ""; if (j.status === "running") bpoll(); else again("#books"); })
       .catch(function(e){ bshow({say: e.message, cls: "err"}); bgo.disabled = false; });
   });
   if (bbox.getAttribute("data-running") === "1"){ bgo.disabled = true; bpoll(); }
+  ["book-m1", "book-m2", "book-judge"].forEach(function(i){     // the page remembers who you picked last time
+    var e = document.getElementById(i); if (!e) return;
+    try { var v = localStorage.getItem("kb-" + i); if (v !== null && Array.prototype.some.call(e.options,
+      function(o){ return o.value === v; })) e.value = v; } catch (x) {}
+    e.addEventListener("change", function(){ try { localStorage.setItem("kb-" + i, e.value); } catch (x) {} });
+  });
 }
 
 function again(part){             // load the page again at a box; a change of the #part alone would not reload it
@@ -1377,14 +1395,30 @@ def ideas_box(lang: str, v: dict | None) -> str:
     return "".join(out) + "</section>"
 
 
-def books_box(lang: str, shelf: books.Shelf, who: list[str], problem: str | None, running: bool) -> str:
-    """Your books: titles in, and each framed book's framework, platform, features and song, folded."""
+def book_picks(lang: str, offer: list[str], first: str | None) -> str:
+    """Who frames: one model, a second one to compare, and a third to bring both together. Only models you can ask."""
+    if len(offer) < 2:
+        return ""
+    def sel(i: str, pick: str | None, none: bool) -> str:
+        opts = ([f'<option value="">{_e(_t(lang, "bk_none"))}</option>'] if none else []) + [
+            f'<option value="{_e(n)}"{" selected" if n == pick else ""}>{_e(n)}</option>' for n in offer]
+        return f'<select id="{i}" data-keep="kb-{i}">{"".join(opts)}</select>'
+    return (f'<div class="row book-picks"><label>{_e(_t(lang, "bk_with"))} {sel("book-m1", first, False)}</label>'
+            f'<label>{_e(_t(lang, "bk_and"))} {sel("book-m2", None, True)}</label>'
+            f'<label>{_e(_t(lang, "bk_judge"))} {sel("book-judge", None, True)}</label></div>'
+            f'<p class="soft small">{_e(_t(lang, "bk_pick_note"))}</p>')
+
+
+def books_box(lang: str, shelf: books.Shelf, who: list[str], problem: str | None, running: bool,
+              offer: list[str] | None = None) -> str:
+    """Your books: titles in, who frames them, and each framed book's framework, platform, features and song, folded."""
     rows = shelf.items()
     say = (_t(lang, "books_who", who=", ".join(who)) if who else _t(lang, "books_no_model", e=problem or "?"))
     out = [f'<section class="box books" id="books" data-running="{1 if running else 0}"><h2>{_e(_t(lang, "books_h"))}'
            f'{f" ({len(rows)})" if rows else ""}</h2><p class="soft small">{_e(_t(lang, "books_note"))}</p>'
            f'<textarea id="book-titles" dir="auto" rows="3" placeholder="{_e(_t(lang, "books_ph"))}" '
            f'aria-label="{_e(_t(lang, "books_ph"))}"></textarea>'
+           + book_picks(lang, offer or [], who[0] if who else None) +
            f'<div class="row"><button type="button" id="book-go"{"" if who else " disabled"}>{_e(_t(lang, "b_frame"))}</button>'
            f'<span id="book-say" role="status" class="soft small">{_e(say)}</span></div>']
     if not rows:
@@ -1425,6 +1459,17 @@ def books_box(lang: str, shelf: books.Shelf, who: list[str], problem: str | None
                          f'<pre class="song" dir="auto">{_e(f["song"]["lyrics"])}</pre>')
         if f.get("unsure"):
             parts.append(f'<p class="soft small">{_e(_t(lang, "bk_unsure"))}: <bdi>{_e(f["unsure"])}</bdi></p>')
+        if f.get("agree") or f.get("differ"):
+            parts.append(f'<h4>{_e(_t(lang, "bk_compare"))}</h4><ul>'
+                         + "".join(f'<li><b>{_e(_t(lang, "bk_agree"))}:</b> <bdi>{_e(x)}</bdi></li>' for x in f.get("agree") or [])
+                         + "".join(f'<li><b>{_e(_t(lang, "bk_differ"))}:</b> <bdi>{_e(x)}</bdi></li>' for x in f.get("differ") or [])
+                         + "</ul>")
+        for rw, rf in (f.get("readings") or {}).items():
+            if not rf.get("known"):
+                continue
+            parts.append(f'<details class="g-more"><summary>{_e(_t(lang, "bk_reading", who=rw))}</summary><ol>' + "".join(
+                f'<li><b><bdi>{_e(x["name"])}</bdi></b> <bdi>{_e(x["says"])}</bdi></li>' for x in rf.get("framework") or [])
+                + "</ol></details>")
         items.append(f'<li><details><summary>{head}</summary>{"".join(parts)}</details></li>')
     out.append(f'<ul class="g-list book-list">{"".join(items)}</ul>')
     return "".join(out) + "</section>"
@@ -1859,24 +1904,48 @@ class Kb:
             return c["here"][:1], [], None
         return [], [], c["problem"] or "no model"
 
+    def frame_offer(self) -> list[str]:
+        """The models you may pick to frame a book: the paid ones under your cap, then the ones on this laptop."""
+        c = self.chosen()
+        return [*c["paid"], *[n for n in c["here"] if n not in c["paid"]]]
+
     def books_html(self, lang: str) -> str:
         who, _, problem = self.framer()
         return books_box(lang, self.shelf, who, problem,
-                         self.jobs.state().get("status") == "running" and self.jobs.state().get("kind") == "frame")
+                         self.jobs.state().get("status") == "running" and self.jobs.state().get("kind") == "frame",
+                         offer=self.frame_offer())
 
-    def frame_start(self, lang: str) -> dict | None:
-        """Start the frame-outer on the waiting books, when there are some and nothing else runs. None when not."""
+    def frame_picks(self, picks: dict | None) -> tuple[list[str], str | None]:
+        """(the models that read each book, the judge) from the page's choice, checked against what you may ask."""
+        if not picks or not picks.get("models"):
+            return [], None
+        offer = self.frame_offer()
+        names = list(dict.fromkeys(str(x) for x in picks.get("models") or [] if x))
+        judge = str(picks.get("judge") or "") or None
+        bad = [n for n in [*names, *([judge] if judge else [])] if n not in offer]
+        if bad:
+            raise KeyError(", ".join(bad))
+        return names, (judge if len(names) > 1 else None)
+
+    def frame_start(self, lang: str, picks: dict | None = None) -> dict | None:
+        """Start the frame-outer on the waiting books, when there are some and nothing else runs. None when not.
+        picks names the models that read each book and the one that brings them together; else one model frames."""
         if not self.shelf.waiting():
             return None
+        names, judge = self.frame_picks(picks)
         who, allow, _ = self.framer()
+        if names:
+            paid = set(self.chosen()["paid"])
+            who, allow = names, [n for n in dict.fromkeys([*names, *([judge] if judge else [])]) if n in paid]
         if not who or self.jobs.state()["status"] == "running":
             return None
         day = ["--today", self.today.isoformat()] if self.today else []
+        more = [x for n in who[1:] for x in ("--also", n)] + (["--judge", judge] if judge else [])
         argv = actions.cli("books", "frame", "--books", self.shelf.folder, "--file", self.picture, "--models-file",
                            self.models, "--runlog", self.runlog, "--private", self.private, "--model", who[0],
-                           "--lang", lang, "--json", *(["--allow", ",".join(allow)] if allow else []), *day)
+                           *more, "--lang", lang, "--json", *(["--allow", ",".join(allow)] if allow else []), *day)
         try:
-            return self.jobs.start("frame", argv, models=who)
+            return self.jobs.start("frame", argv, models=[*who, *([judge] if names and judge else [])])
         except actions.Busy:
             return None
 
@@ -2392,13 +2461,24 @@ class Handler(BaseHTTPRequestHandler):
         """Titles from the Your books box: onto the shelf, and the frame-outer starts on every book that waits."""
         lang = body.get("lang") if body.get("lang") in LABELS else self.kb.lang
         titles = [t for t in (" ".join(x.split()) for x in str(body.get("titles") or "").splitlines()) if t][:30]
+        picks = {"models": [x for x in body.get("models") or [] if isinstance(x, str)][:2],
+                 "judge": body.get("judge") if isinstance(body.get("judge"), str) else None}
+        try:
+            self.kb.frame_picks(picks)
+        except KeyError as e:
+            return self._json(400, {"say": _t(lang, "bk_bad_pick", e=e.args[0]), "cls": "err"})
         new = self.kb.shelf.add(titles, self.kb.today or date.today(), via="page")
+        shelf = self.kb.shelf.read()
+        for t in titles:                              # a title framed before is framed again, by the models picked now
+            k = books.slug(t)
+            if t not in new and shelf.get(k, {}).get("status") in ("framed", "failed"):
+                self.kb.shelf.set(k, status="waiting")
         if not self.kb.shelf.waiting():
             return self._json(400 if not titles else 200, {"say": _t(lang, "books_no_titles" if not titles else
                                                                        "books_added", n=len(new)), "cls": "err" if not titles else "kept"})
         if self.kb.jobs.state()["status"] == "running":
             return self._json(409, {"say": _t(lang, "busy"), "cls": "err"})
-        state = self.kb.frame_start(lang)
+        state = self.kb.frame_start(lang, picks)
         if state is None:
             _, _, problem = self.kb.framer()
             return self._json(400, {"say": _t(lang, "books_no_model", e=problem or "?"), "cls": "err"})

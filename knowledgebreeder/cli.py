@@ -246,6 +246,9 @@ def main(argv: list[str] | None = None) -> int:
     bk.add_argument("--file", default=os.environ.get("KB_PICTURE", "work/picture.json"), help="the picture")
     bk.add_argument("--models-file", default=mfile); bk.add_argument("--runlog", default=runlog)
     bk.add_argument("--private", default=pfile, metavar="PATH"); bk.add_argument("--model")
+    bk.add_argument("--also", action="append", default=[], metavar="NAME",
+                    help="for frame: another model that reads each book too (each costs about one more book)")
+    bk.add_argument("--judge", metavar="NAME", help="for frame: a model that brings the readings together into one")
     bk.add_argument("--allow", action="append", default=[], metavar="NAME")
     bk.add_argument("--lang", choices=["en", "ar"], default="en"); bk.add_argument("--today")
     bk.add_argument("--json", action="store_true")
@@ -1236,8 +1239,10 @@ def _books(a, dump) -> int:
         from .runlog import RunLog
         log = RunLog(a.runlog)
         try:
+            also = [book.get(n.strip()) for x in a.also for n in x.split(",") if n.strip()]
             r = books.frame_waiting(shelf, os.path.join(os.path.dirname(os.path.abspath(a.books)), "ideas"), cards, m,
-                                    guard, today, a.lang, a.allow, log, only=a.rest or None)
+                                    guard, today, a.lang, a.allow, log,
+                                    only=a.rest or None, also=also, judge=book.get(a.judge) if a.judge else None)
         finally:
             log.close()
         if a.json:
@@ -1250,7 +1255,7 @@ def _books(a, dump) -> int:
             if b["status"] == "failed":
                 print(f"- {b['title']}: not framed. {b['error']}")
             elif not b["known"]:
-                print(f"- {b['title']}: {m.name} does not know this book well enough, so it made nothing up.")
+                print(f"- {b['title']}: {b.get('by') or m.name} does not know this book well enough, so it made nothing up.")
             else:
                 print(f"- {b['title']}: framed. {b['ideas']} lines are now in Your ideas, {b['features']} of them "
                       f"features for your platforms." + (f" Cost ${b['cost']:.4f}." if b.get("cost") else ""))
