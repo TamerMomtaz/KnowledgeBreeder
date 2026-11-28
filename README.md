@@ -911,9 +911,15 @@ first paid model under your daily cap (they know books best), else a model on th
 and the name and first line of each card that is not private. The frames are kept in `work/books/`, and their lines
 land in Your ideas, where you tick what rings true.
 
+You can pick who frames a book on the page: one model, or two that each read it, plus a third that brings both
+readings together into one. The third keeps what both say, picks the better reading where they differ, and lists the
+agreements and differences under the book, where each model's own reading also stays. Each model you add costs about
+one more book. A title you framed before is framed again with the models you pick now.
+
 ```
 kb books add "Algorithms to Live By"
 kb books frame --model kimi --allow kimi
+kb books frame --model kimi --also openai --judge claude --allow kimi,openai,claude
 kb books show "Algorithms to Live By"
 ```
 

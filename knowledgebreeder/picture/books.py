@@ -137,6 +137,31 @@ def platforms(cards: dict[str, dict], guard: _private.Private) -> tuple[list[tup
     return keep, held
 
 
+MERGE = """You are the frame-outer's judge, one agent of kb. Two models each read the same book for a person and
+framed it. Bring the two readings together into one, the best of both: keep what both say; where they differ, keep
+the one that is truer to the book and more useful to this person; drop anything that looks made up. Do not add
+principles neither reading has, unless one of them plainly missed a principle the book is known for, and then say so
+in "differ". If neither reading knows the book, reply with "known": false.
+
+Reply with one JSON object, no words outside it, in the same shape as the readings:
+{"known": ..., "author": ..., "framework": [...], "platform": {...}, "features": [...], "song": {...}, "unsure": ...,
+ "agree": [ up to 6 short lines: where the two readings agree ],
+ "differ": [ up to 6 short lines: where they differ, and which one you kept and why ]}
+
+Write every value in %(language)s. Copy platform names in "features" exactly as listed; never add one that is not
+listed. Write one new song that carries the merged framework."""
+
+
+def merge_prompt(title: str, readings: dict[str, dict], plats: list[tuple[str, str]],
+                 lang: str = "en") -> tuple[str, str]:
+    system = MERGE % {"language": LANGUAGES.get(lang, "English")}
+    listed = "\n".join(f"- {n}: {line}" if line else f"- {n}" for n, line in plats) or "- (none yet)"
+    keep = ("known", "author", "framework", "platform", "features", "song", "unsure")
+    shown = "\n\n".join(f"Reading {i} (by {who}):\n" + json.dumps({k: f.get(k) for k in keep}, ensure_ascii=False)
+                         for i, (who, f) in enumerate(readings.items(), 1))
+    return system, f"The book: {title}\n\nThe person's platforms (name: what it is):\n{listed}\n\n{shown}"
+
+
 def prompt(title: str, plats: list[tuple[str, str]], lang: str = "en") -> tuple[str, str]:
     system = SYSTEM % {"language": LANGUAGES.get(lang, "English")}
     listed = "\n".join(f"- {n}: {line}" if line else f"- {n}" for n, line in plats) or "- (none yet)"
@@ -180,6 +205,19 @@ def check(raw: Any, plats: list[tuple[str, str]]) -> dict:
     return out
 
 
+def merge_one(title: str, readings: dict[str, dict], judge: models.Model, plats: list[tuple[str, str]],
+              lang: str = "en", allow=()) -> tuple[dict, models.Answer]:
+    """The judge brings two (or more) readings together. The result is checked like any reading."""
+    system, user = merge_prompt(title, readings, plats, lang)
+    raw, answer = models.ask_json(judge, system, user, allow=allow,
+                                  sending=f"the title of one book, {len(readings)} models' readings of it, and the "
+                                          f"name and first line of {len(plats)} cards")
+    f = check(raw, plats)
+    f["agree"] = [_s(x, 240) for x in (raw.get("agree") or [] if isinstance(raw, dict) else []) if _s(x)][:6]
+    f["differ"] = [_s(x, 240) for x in (raw.get("differ") or [] if isinstance(raw, dict) else []) if _s(x)][:6]
+    return f, answer
+
+
 def md(title: str, f: dict, worker: str, day: str) -> str:
     """The frame as a page. Its headings are the ones Your ideas reads: principles, platform idea, feature ideas."""
     by = f" by {f['author']}" if f.get("author") else ""
@@ -203,6 +241,9 @@ def md(title: str, f: dict, worker: str, day: str) -> str:
         L += ["", f"## The song: {f['song']['title'] or title}", ""] + [f"    {ln}" for ln in f["song"]["lyrics"].splitlines()]
     if f.get("unsure"):
         L += ["", "## Reality check", "", f"- The model is least sure of this: {f['unsure']}"]
+    if f.get("agree") or f.get("differ"):
+        L += ["", "## How the readings compare", ""] + [f"- Both say: {x}" for x in f.get("agree") or []]
+        L += [f"- They differ: {x}" for x in f.get("differ") or []]
     return "\n".join(L) + "\n"
 
 
@@ -214,39 +255,79 @@ def frame_one(title: str, m: models.Model, plats: list[tuple[str, str]], lang: s
     return check(raw, plats), answer
 
 
+def who_framed(names: list[str], judge: str | None) -> str:
+    """How the shelf names who framed a book: one model, two side by side, or two brought together by a third."""
+    both = " + ".join(names)
+    return f"{both} → {judge}" if judge and len(names) > 1 else both
+
+
 def frame_waiting(shelf: Shelf, ideas_dir: str | Path, cards: dict[str, dict], m: models.Model,
                   guard: _private.Private, today: date, lang: str = "en", allow=(), log=None,
-                  only: list[str] | None = None, limit: int = MAX_A_RUN) -> dict:
-    """Frame the books that wait (or the ones named), up to limit. Each result is on the shelf and in Your ideas."""
+                  only: list[str] | None = None, limit: int = MAX_A_RUN, also: list[models.Model] | tuple = (),
+                  judge: models.Model | None = None) -> dict:
+    """Frame the books that wait (or the ones named), up to limit. Each result is on the shelf and in Your ideas.
+    With also, more models read each book too; with a judge, the judge brings their readings together into one."""
     plats, held = platforms(cards, guard)
     todo = [(k, v) for k, v in shelf.waiting() if not only or v["title"] in only][:limit]
-    run = log.start("frame", label=m.name, subject=f"{len(todo)} books") if log else None
+    readers = [m, *[x for x in also if x.name != m.name]]
+    judge = judge if judge is not None and len(readers) > 1 else None
+    label = who_framed([x.name for x in readers], judge.name if judge else None)
+    run = log.start("frame", label=label, subject=f"{len(todo)} books") if log else None
     done: list[dict] = []
     for key, entry in todo:
         title = entry["title"]
-        try:
-            f, a = frame_one(title, m, plats, lang, allow)
-        except (models.ModelError, models.Refused) as e:
-            shelf.set(key, status="failed", error=str(e)[:300], tried=today.isoformat(), worker=m.name)
+        readings: dict[str, dict] = {}
+        costs, errors, model_ids = 0.0, [], []
+        for r in readers:
+            try:
+                f1, a1 = frame_one(title, r, plats, lang, allow)
+            except (models.ModelError, models.Refused) as e:
+                errors.append(f"{r.name}: {str(e)[:200]}")
+                if run:
+                    run.record("frame", worker=r.name, subject=title, status="failed", error=str(e)[:300])
+                continue
+            f1.update(worker=r.name, model=a1.model, cost=a1.cost)
+            readings[r.name] = f1
+            costs += a1.cost or 0.0
+            model_ids.append(a1.model)
             if run:
-                run.record("frame", worker=m.name, subject=title, status="failed", error=str(e)[:300])
-            done.append({"title": title, "status": "failed", "error": str(e)[:300]})
+                run.record("frame", worker=r.name, subject=title, tokens_in=a1.tokens_in, tokens_out=a1.tokens_out,
+                           cost=a1.cost, duration_ms=a1.ms, where=a1.where, known=f1["known"])
+        if not readings:
+            err = "; ".join(errors)[:300]
+            shelf.set(key, status="failed", error=err, tried=today.isoformat(), worker=label)
+            done.append({"title": title, "status": "failed", "error": err})
             continue
-        f.update(title=title, worker=m.name, model=a.model, framed=today.isoformat(), cost=a.cost,
-                 at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        known = {k: v for k, v in readings.items() if v["known"]}
+        f, by = next(iter(known.values() or readings.values())), next(iter(known or readings))
+        if judge and len(known) > 1:
+            try:
+                f, aj = merge_one(title, known, judge, plats, lang, allow)
+                costs += aj.cost or 0.0
+                by = who_framed(list(known), judge.name)
+                if run:
+                    run.record("frame-merge", worker=judge.name, subject=title, tokens_in=aj.tokens_in,
+                               tokens_out=aj.tokens_out, cost=aj.cost, duration_ms=aj.ms, where=aj.where)
+            except (models.ModelError, models.Refused) as e:
+                errors.append(f"{judge.name} could not bring them together: {str(e)[:200]}")
+        f = dict(f)
+        f.update(title=title, worker=by, model=", ".join(x for x in model_ids if x), framed=today.isoformat(),
+                 cost=round(costs, 6), at=datetime.now(timezone.utc).isoformat(timespec="seconds"))
+        if len(readings) > 1:
+            f["readings"] = readings
+        if errors:
+            f["errors"] = errors
         shelf.folder.mkdir(parents=True, exist_ok=True)
         (shelf.folder / f"{key}.json").write_text(json.dumps(f, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-        page = md(title, f, m.name, today.isoformat())
+        page = md(title, f, by, today.isoformat())
         (shelf.folder / f"{key}.md").write_text(page, encoding="utf-8")
         kept = ideas.keep_file(ideas_dir, f"book-{key}.md", page)
-        shelf.set(key, status="framed", framed=today.isoformat(), worker=m.name, known=f["known"],
+        shelf.set(key, status="framed", framed=today.isoformat(), worker=by, known=f["known"],
                   ideas=kept["rows"], error=None)
-        if run:
-            run.record("frame", worker=m.name, subject=title, tokens_in=a.tokens_in, tokens_out=a.tokens_out,
-                       cost=a.cost, duration_ms=a.ms, where=a.where, known=f["known"])
         done.append({"title": title, "status": "framed", "known": f["known"], "ideas": kept["rows"],
-                     "features": len(f["features"]), "dropped": f["dropped_features"], "cost": a.cost})
+                     "features": len(f["features"]), "dropped": f["dropped_features"], "cost": round(costs, 6),
+                     "by": by, **({"errors": errors} if errors else {})})
     if run:
         run.end("ok" if any(d["status"] == "framed" for d in done) or not done else "failed")
-    return {"run": run.id if run else None, "worker": m.name, "books": done, "held_cards": held,
+    return {"run": run.id if run else None, "worker": label, "books": done, "held_cards": held,
             "left": len(shelf.waiting())}
