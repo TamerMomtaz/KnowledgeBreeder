@@ -52,7 +52,7 @@ TEXT = {
                         "stays on this laptop.",
                 "how": "Type or paste in the box, add files if you like, then press Send to kb. A few words sent with "
                        "files become their note. A cards file sent here goes into your picture instead.",
-                "buttons": [("attach", "Pick files from this phone or laptop, up to 20 MB each."),
+                "buttons": [("attach", "Pick files from this phone or laptop, up to 100 MB each."),
                             ("record", "Records until you press Stop recording."),
                             ("send", "Keeps the words and the files in your inbox. Sending twice is safe.")],
             },

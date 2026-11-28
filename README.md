@@ -800,7 +800,7 @@ What kb read goes into `work/inbox/text`, one file per item, so the scout can lo
 kb scout read work/inbox/text
 ```
 
-A send can be up to 20 MB a file. Nothing in the inbox leaves the laptop, unless you run the scout with a model you
+A send can be up to 100 MB a file. Nothing in the inbox leaves the laptop, unless you run the scout with a model you
 `--allow` for that run.
 
 #### Share to kb from any app

@@ -36,7 +36,7 @@ import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-MAX_FILE = 20 * 1024 * 1024          # one item, as it came
+MAX_FILE = 100 * 1024 * 1024         # one item, as it came (a long report PDF can pass 20 MB)
 MAX_TEXT = 400_000                   # characters of read text kept per item
 MAX_UNZIPPED = 40 * 1024 * 1024      # a Word or PowerPoint file may not unpack to more than this
 MAX_PAGES = 400

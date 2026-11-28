@@ -172,7 +172,7 @@ def test_the_phone_page_sends_posts_files_and_voice_notes_to_the_laptop(phone, t
     assert ask(kb, "POST", "/api/lesson", {"text": "x" * (serve.MAX_BODY + 10)}, o)[0] == 413    # the lesson cap holds
     big = {"name": "big.bin", "data": base64.b64encode(b"x" * (inb.MAX_FILE + 1)).decode()}
     code, _, said = ask(kb, "POST", "/api/inbox", big, o)
-    assert code == 400 and "20 MB" in json.loads(said)["error"]
+    assert code == 400 and "100 MB" in json.loads(said)["error"]
 
     items = inb.Inbox(tmp_path / "w" / "inbox").items()
     assert len(items) == 4 and {x["via"] for x in items} == {"phone"}

@@ -9,7 +9,7 @@ What it guards against, since a page in your own browser could try to talk to it
   which stops a web page from reaching it through a renamed address (DNS rebinding);
 - a change must be a JSON POST carrying the header X-KB: 1, which a page from another site cannot send without
   asking first, and kb never says yes; an Origin header, when there is one, must be this same address;
-- bodies are small (the inbox takes files up to 20 MB each), and every page says no to frames, referrers and
+- bodies are small (the inbox takes files up to 100 MB each, one file a request), and every page says no to frames, referrers and
   outside resources.
 
 Ratings, picks, lessons and the inbox go through the same code as the command line, so the rules are the same. What
@@ -45,7 +45,7 @@ from . import private as prv
 from . import soon as soon_mod
 
 MAX_BODY = 64_000
-MAX_INBOX_BODY = 30_000_000          # up to ten files a send, each up to inbox.MAX_FILE, sent as base64
+MAX_INBOX_BODY = 140_000_000         # one file a request, up to inbox.MAX_FILE, sent as base64 (4/3 its size)
 MAX_CARDS_BODY = 4_000_000           # one cards file, as text
 SHORT_NOTE = 280                     # words sent with files and no longer than this are their note, not a post
 RUN = re.compile(r"^/run/(run_[0-9A-Za-z]{6,32})$")
@@ -73,7 +73,7 @@ LABELS = {
         "send": "Send to kb", "sending": "Sending…", "sent": "Kept: {n}.", "again": "{n} already in your inbox.",
         "in_cards": "Cards files: {n}. They went into your picture, not the inbox; Ask kb says what changed.",
         "not_sent": "Not sent: {e}. Sending again is safe: kb keeps each thing once.",
-        "remove": "Remove {name}", "too_big": "{name} is over 20 MB, so kb cannot keep it.",
+        "remove": "Remove {name}", "too_big": "{name} is over 100 MB, so kb cannot keep it.",
         "no_mic": "No microphone: {e}", "inbox_empty": "Nothing here yet.",
         "inbox_more": "{n} items in all. On the laptop: kb inbox",
         "k_text": "text", "k_link": "link", "k_pdf": "PDF", "k_word": "Word", "k_slides": "slides",
@@ -258,7 +258,7 @@ LABELS = {
         "send": "أرسل إلى kb", "sending": "جارٍ الإرسال…", "sent": "حُفظ: {n}.", "again": "موجود من قبل في صندوقك: {n}.",
         "in_cards": "ملفات بطاقات: {n}. ذهبت إلى صورتك لا إلى الصندوق، ويقول «اسأل kb» ما الذي تغيّر.",
         "not_sent": "لم يُرسل: {e}. الإرسال مرة أخرى آمن: يحفظ kb كل شيء مرة واحدة.",
-        "remove": "احذف {name}", "too_big": "{name} أكبر من 20 ميغابايت، فلا يحفظه kb.",
+        "remove": "احذف {name}", "too_big": "{name} أكبر من 100 ميغابايت، فلا يحفظه kb.",
         "no_mic": "لا ميكروفون: {e}", "inbox_empty": "لا شيء هنا بعد.",
         "inbox_more": "عدد العناصر كلها: {n}. على اللابتوب: kb inbox",
         "k_text": "نص", "k_link": "رابط", "k_pdf": "PDF", "k_word": "Word", "k_slides": "شرائح",
