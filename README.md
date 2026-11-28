@@ -284,8 +284,10 @@ Limits: "may help" is word matching, not understanding. Two thoughts that say th
 not joined, and two that share words by chance are. A model reads only the first part of a long item, as much as
 fits its budget, and the command says how many lines were left out. The thoughts a model writes are its reading:
 the check proves each one cites real lines, not that it reads them rightly. So read the source's words under each
-thought before you build on it. kb does not yet link a new inbox item the moment it arrives from the phone. It does
-so the next time a `kb thoughts` command runs. The page has no Ask box for the map yet. Arabic covers the page and
+thought before you build on it. While `kb serve` runs, the model on this laptop reads each new inbox item into the map as it
+arrives (and every half hour, for anything left over), and each inbox line on the page says what became of it: how
+many thoughts, in which subject, how many links to what you had, or why it is not in the map yet. Only a model on
+this laptop reads this way, so nothing you send leaves the laptop for it. The page has no Ask box for the map yet. Arabic covers the page and
 kb's own words, not the thoughts, which keep the words they were written in.
 
 ## The run log

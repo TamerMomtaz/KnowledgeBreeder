@@ -76,6 +76,13 @@ LABELS = {
         "remove": "Remove {name}", "too_big": "{name} is over 100 MB, so kb cannot keep it.",
         "no_mic": "No microphone: {e}", "inbox_empty": "Nothing here yet.",
         "inbox_more": "{n} items in all. On the laptop: kb inbox",
+        "m_read": "In your map: {n} thoughts in \u201c{subject}\u201d, {links} links to what you had.",
+        "m_none": "Read into your map: nothing in it held a thought kb could keep.",
+        "m_wait": "Your model on this laptop reads it into your map soon.",
+        "m_now": "Your model on this laptop is reading your inbox into your map now.",
+        "m_reader": "Kept whole: it waits for a picture or voice reader on this laptop.",
+        "m_failed": "Not read into your map yet: {e}",
+        "m_no_model": "Not read into your map: no model on this laptop ({e}).",
         "k_text": "text", "k_link": "link", "k_pdf": "PDF", "k_word": "Word", "k_slides": "slides",
         "k_image": "picture", "k_audio": "voice", "k_other": "file",
         "ask_h": "Ask kb",
@@ -261,6 +268,13 @@ LABELS = {
         "remove": "احذف {name}", "too_big": "{name} أكبر من 100 ميغابايت، فلا يحفظه kb.",
         "no_mic": "لا ميكروفون: {e}", "inbox_empty": "لا شيء هنا بعد.",
         "inbox_more": "عدد العناصر كلها: {n}. على اللابتوب: kb inbox",
+        "m_read": "في خريطتك: {n} فكرة في \u201c{subject}\u201d، و{links} رابطًا بما كان عندك.",
+        "m_none": "قُرئ في خريطتك: لم يكن فيه فكرة يحفظها kb.",
+        "m_wait": "سيقرؤه نموذجك على هذا اللابتوب في خريطتك قريبًا.",
+        "m_now": "نموذجك على هذا اللابتوب يقرأ صندوقك في خريطتك الآن.",
+        "m_reader": "محفوظ كما هو: ينتظر قارئًا للصور أو الصوت على هذا اللابتوب.",
+        "m_failed": "لم يُقرأ في خريطتك بعد: {e}",
+        "m_no_model": "لم يُقرأ في خريطتك: لا نموذج على هذا اللابتوب ({e}).",
         "k_text": "نص", "k_link": "رابط", "k_pdf": "PDF", "k_word": "Word", "k_slides": "شرائح",
         "k_image": "صورة", "k_audio": "صوت", "k_other": "ملف",
         "ask_h": "اسأل kb",
@@ -933,8 +947,30 @@ send.addEventListener("click", function(){
 """
 
 
-def inbox_html(box: list[dict], lang: str, got: dict | None = None, show: int = 12) -> str:
-    """The inbox box: paste, attach, record, send, then the newest items."""
+def map_say(item: dict, mapped: dict | None, lang: str) -> str:
+    """One line under an inbox item: what became of it in your map of thoughts. Empty when kb knows nothing yet."""
+    if mapped is None:
+        return ""
+    s = mapped["sources"].get("inbox:" + item["id"])
+    if s and s.get("status") == "read":
+        r = s.get("read") or {}
+        if not r.get("kept"):
+            return _t(lang, "m_none")
+        return _t(lang, "m_read", n=r["kept"], subject=s.get("subject") or "-", links=mapped["links"].get(s["id"], 0))
+    if s and s.get("status") == "waits_reader":
+        return _t(lang, "m_reader")
+    if item.get("status") in ("waits_image", "waits_speech"):
+        return _t(lang, "m_reader")
+    if mapped.get("problem"):
+        return _t(lang, "m_no_model", e=mapped["problem"])
+    err = (mapped.get("errors") or {}).get("inbox:" + item["id"])
+    if err:
+        return _t(lang, "m_failed", e=err)
+    return _t(lang, "m_now" if mapped.get("running") else "m_wait")
+
+
+def inbox_html(box: list[dict], lang: str, got: dict | None = None, show: int = 12, mapped: dict | None = None) -> str:
+    """The inbox box: paste, attach, record, send, then the newest items, each with what became of it in your map."""
     got = got or {}
     said = " ".join(x for x in (_t(lang, "sent", n=got["kept"]) if got.get("kept") else "",
                                 _t(lang, "again", n=got["again"]) if got.get("again") else "",
@@ -945,7 +981,9 @@ def inbox_html(box: list[dict], lang: str, got: dict | None = None, show: int = 
         what = x.get("name") or x.get("preview") or "-"
         notes = "".join(f'<span class="note"><bdi>{_e(n["text"][:200])}</bdi></span>' for n in x.get("notes", [])[-2:])
         rows.append(f'<li><span class="kind">{_e(_t(lang, "k_" + x["kind"]))}</span><span class="what"><bdi>{_e(what)}</bdi></span>'
-                    f'{notes}<span class="meta"><span>{_e(x["received"])}</span><span>{_e(inb.say(x, lang))}</span></span></li>')
+                    f'{notes}<span class="meta"><span>{_e(x["received"])}</span><span>{_e(inb.say(x, lang))}</span></span>'
+                    + (f'<span class="meta mapped"><span>{_e(m)}</span></span>' if (m := map_say(x, mapped, lang)) else "")
+                    + '</li>')
     items = (f'<ul class="inbox">{"".join(rows)}</ul>' + (f'<p class="soft small">{_e(_t(lang, "inbox_more", n=len(box)))}</p>'
              if len(box) > show else "")) if rows else f'<p class="soft small">{_e(_t(lang, "inbox_empty"))}</p>'
     return (f'<section class="box" id="inbox"><h2>{_e(_t(lang, "inbox_h"))} ({len(box)})</h2>'
@@ -1562,7 +1600,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
           today: date | None = None, box: list[dict] | None = None, got: dict | None = None,
           ask: str | None = None, where: str | None = None, waits: str | None = None, soon: str | None = None,
           nudges: str | None = None, grows: str | None = None, ideas_html: str | None = None,
-          books_html: str | None = None, update: dict | None = None) -> str:
+          books_html: str | None = None, update: dict | None = None, mapped: dict | None = None) -> str:
     """The first page: your inbox, every advice run, newest first, with what you have recorded, and your lessons."""
     lang = lang if lang in LABELS else "en"
     runs = query.runs(log, task="advise", limit=limit) if log else []
@@ -1600,7 +1638,7 @@ def index(log: RunLog | None, lessons: list[str], lang: str = "en", who: str | N
     # column, inbox first. Without an inbox the runs take the wide column.
     # The Ask kb box comes first in the narrow column: the buttons for what used to need the terminal.
     if box is not None:
-        main = (soon or "") + inbox_html(box, lang, got) + (ideas_html or "") + (books_html or "") + (waits or "") + (grows or "") + (where or "")
+        main = (soon or "") + inbox_html(box, lang, got, mapped=mapped) + (ideas_html or "") + (books_html or "") + (waits or "") + (grows or "") + (where or "")
         side = (ask or "") + (nudges or "") + runs_box + lessons_box
     else:
         main = (soon or "") + runs_box + (ideas_html or "") + (books_html or "") + (waits or "") + (grows or "") + (where or "")
@@ -1660,6 +1698,11 @@ class Kb:
         self.update_run = upd._run                              # tests put a stand-in here; nothing runs git then
         self.update_lock = threading.Lock()
         self.update_checked = 0.0                               # when kb last asked GitHub (time.monotonic)
+        self.map_file = work / "thoughts.json"                  # layer 3: your map of thoughts
+        self.map_run = actions.run_cli                          # tests put a stand-in here; no model is asked then
+        self.map_wake = threading.Event()                       # set when something lands in the inbox
+        self.map_state: dict = {"running": False}               # the reader: running now, or why it could not read
+        self._mapped: tuple | None = None
         self.handoff_post = handoff._post                       # tests put a stand-in here; nothing leaves then
         self.ideas_dir = work / "ideas"
         self.ideas_book = ideas.Book(work / "ideas.json")
@@ -1884,6 +1927,91 @@ class Kb:
         t.start()
         return t
 
+    def map_reader(self) -> tuple[str | None, str | None]:
+        """(the model on this laptop that reads the inbox into your map, why none). Only a model here: what you send
+        stays on the laptop, and reading costs nothing."""
+        c = self.chosen()
+        if c["here"]:
+            return c["here"][0], None
+        return None, c["problem"] or "none is set up"
+
+    def read_into_map(self, lang: str | None = None, rounds: int = 20, each: int = 3) -> dict:
+        """Read what waits in the inbox into your map with the model on this laptop, a few items a round, until
+        nothing waits. Each round is the same kb thoughts read you could type."""
+        who, problem = self.map_reader()
+        if not who:
+            self.map_state = {"running": False, "problem": problem}
+            return self.map_state
+        day = ["--today", self.today.isoformat()] if self.today else []
+        argv = actions.cli("thoughts", "read", "--model", who, "--limit", each, "--json", "--map", self.map_file,
+                           "--file", self.picture, "--inbox", self.inbox.root, "--books", self.shelf.folder,
+                           "--models-file", self.models, "--runlog", self.runlog, "--private", self.private,
+                           "--lang", lang or self.lang, *day)
+        read = failed = 0
+        errors = dict(self.map_state.get("errors") or {})
+        self.map_state = {"running": True, "model": who, "errors": errors}
+        try:
+            for _ in range(rounds):
+                code, out, err = self.map_run(argv)
+                try:
+                    rows = json.loads(out) if out.strip().startswith("[") else []
+                except ValueError:
+                    rows = []
+                if code != 0:
+                    self.map_state = {"running": False, "model": who, "problem": actions.why(err, code), "errors": errors}
+                    return self.map_state
+                done = [r for r in rows if r.get("status") == "read"]
+                read, failed = read + len(done), failed + len(rows) - len(done)
+                for r in rows:
+                    if r.get("status") == "read":
+                        errors.pop(r.get("source"), None)
+                    else:
+                        errors[r.get("source")] = r.get("error") or "?"
+                if not done:                         # nothing waits, or nothing more can be read this time
+                    break
+        finally:
+            self._mapped = None
+            if self.map_state.get("running"):
+                self.map_state = {"running": False, "model": who, "read": read, "failed": failed, "errors": errors}
+        return self.map_state
+
+    def start_map_reader(self, every: float = 1800) -> threading.Thread:
+        """Read new inbox items into your map as they arrive, and every half hour for anything left over."""
+        def loop():
+            while True:
+                try:
+                    self.read_into_map()
+                except Exception:                     # noqa: BLE001 - a reading that fails must not stop the page
+                    traceback.print_exc()
+                    self.map_state = {"running": False}
+                self.map_wake.wait(every)
+                self.map_wake.clear()
+                time.sleep(2)                         # a send of several files arrives one by one: read them together
+        t = threading.Thread(target=loop, name="kb-map", daemon=True)
+        t.start()
+        return t
+
+    def mapped(self) -> dict:
+        """What the page shows of your map under each inbox item, read again only when the map file changed."""
+        try:
+            stamp = self.map_file.stat().st_mtime_ns
+        except OSError:
+            stamp = None
+        if not self._mapped or self._mapped[0] != stamp:
+            from ..thoughts import store as tk
+            m = tk.Map(self.map_file)
+            links: dict[str, int] = {}
+            for ln in m.links:
+                a, b = m.thoughts.get(ln["a"]) or {}, m.thoughts.get(ln["b"]) or {}
+                if a.get("source") != b.get("source"):
+                    for t in (a, b):
+                        if t.get("source", "").startswith("inbox:"):
+                            links[t["source"]] = links.get(t["source"], 0) + 1
+            self._mapped = (stamp, {"sources": m.sources, "links": links})
+        return {**self._mapped[1], "running": self.map_state.get("running", False),
+                "errors": self.map_state.get("errors") or {},
+                "problem": None if self.map_state.get("running") else self.map_state.get("problem")}
+
     def do_update(self, lang: str = "en") -> dict:
         """Update kb: bring the new code down, then restart kb serve on it when systemd runs it."""
         with self.update_lock:
@@ -1988,7 +2116,8 @@ class Handler(BaseHTTPRequestHandler):
                                  where=self.kb.where_html(lang), waits=self.kb.waits_html(lang),
                                  soon=self.kb.soon_html(lang), nudges=self.kb.nudge_html(lang),
                                  grows=self.kb.grow_html(lang), ideas_html=self.kb.ideas_html(lang),
-                                 books_html=self.kb.books_html(lang), update=self.kb.update_state)
+                                 books_html=self.kb.books_html(lang), update=self.kb.update_state,
+                                 mapped=self.kb.mapped())
                 finally:
                     if log:
                         log.close()
@@ -2072,7 +2201,9 @@ class Handler(BaseHTTPRequestHandler):
                 have, new = les.add(self.kb.lessons, text, self.kb.today or date.today())
                 return self._json(200, {"ok": True, "new": new, "lessons": len(have)})
             if path == "/api/inbox":
-                return self._json(200, {"ok": True, **self._inbox(body)})
+                got = self._inbox(body)
+                self.kb.map_wake.set()                # the reader on this laptop reads it into your map
+                return self._json(200, {"ok": True, **got})
             if path in ("/api/advise", "/api/scout", "/api/cards"):
                 return self._act(path, body)
             if path == "/api/where":
